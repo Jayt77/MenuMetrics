@@ -206,3 +206,187 @@ def show_landing_page() -> bool:
 
     return False
 
+
+def process_uploaded_files(uploaded_files) -> bool:
+    """
+    Process multiple uploaded CSV files.
+
+    Args:
+        uploaded_files: List of uploaded CSV files
+
+    Returns:
+        True if processing successful
+    """
+    try:
+        with st.spinner("Analyzing your files..."):
+            # Initialize adapter
+            adapter = UniversalDataAdapter()
+
+            all_dataframes = {}
+            profiles = {}
+
+            # Load and profile all files
+            for file in uploaded_files:
+                st.write(f"Processing {file.name}...")
+                df = pd.read_csv(file)
+                all_dataframes[file.name] = df
+
+                # Profile the data
+                profile = adapter.profile_dataset(df, file.name)
+                profiles[file.name] = profile
+
+                st.write(f"- {file.name}: {profile.row_count:,} rows, {profile.column_count} columns, Type: {profile.detected_type}")
+
+            # Find the main transaction/order file (largest or has order-like columns)
+            main_file = None
+            main_df = None
+            max_rows = 0
+
+            for filename, df in all_dataframes.items():
+                if len(df) > max_rows:
+                    max_rows = len(df)
+                    main_file = filename
+                    main_df = df
+
+            if main_df is None:
+                st.error("No valid data files found")
+                return False
+
+            st.success(f"Using {main_file} as primary data source")
+
+            # Profile and map the main file
+            profile = profiles[main_file]
+            mappings = adapter.map_columns(main_df, profile, target_schema='transaction_data')
+
+            if not mappings:
+                st.error("Could not automatically map columns. Please check your data format.")
+                return False
+
+            # Show mappings
+            with st.expander("Column Mappings for " + main_file):
+                for mapping in mappings:
+                    st.write(f"✓ `{mapping.uploaded_name}` → `{mapping.standard_name}` "
+                            f"(confidence: {mapping.confidence:.0%})")
+
+            # Validate
+            validation = adapter.validate_data(main_df, mappings)
+
+            if validation.errors:
+                st.error("Data validation failed:")
+                for error in validation.errors:
+                    st.error(f"- {error}")
+                return False
+
+            if validation.warnings:
+                with st.expander("Warnings"):
+                    for warning in validation.warnings:
+                        st.warning(f"- {warning}")
+
+            # Transform data
+            transformed_df = adapter.transform_data(main_df, mappings)
+
+            # Store in session state
+            st.session_state.uploaded_data = transformed_df
+            st.session_state.data_profile = profile
+            st.session_state.data_mappings = mappings
+            st.session_state.data_source = 'uploaded'
+            st.session_state.all_uploaded_files = all_dataframes  # Store all files for reference
+
+            return True
+
+    except Exception as e:
+        st.error(f"Error processing data: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
+        return False
+
+
+def process_uploaded_data(orders_file, menu_file=None) -> bool:
+    """
+    Process uploaded data files using Universal Data Adapter.
+
+    Args:
+        orders_file: Uploaded orders CSV file
+        menu_file: Optional uploaded menu CSV file
+
+    Returns:
+        True if processing successful
+    """
+    try:
+        with st.spinner("Analyzing your data..."):
+            # Initialize adapter
+            adapter = UniversalDataAdapter()
+
+            # Read orders file
+            orders_df = pd.read_csv(orders_file)
+
+            # Profile the data
+            profile = adapter.profile_dataset(orders_df, "orders")
+
+            # Display profile summary
+            st.info(f"""
+            **Data Profile:**
+            - Rows: {profile.row_count:,}
+            - Columns: {profile.column_count}
+            - Type: {profile.detected_type.title()} Data
+            - Quality Score: {profile.quality_score:.1f}/100
+            - Completeness: {profile.completeness:.1f}%
+            """)
+
+            # Map columns
+            mappings = adapter.map_columns(orders_df, profile, target_schema='transaction_data')
+
+            if not mappings:
+                st.error("Could not automatically map columns. Please check your data format.")
+                return False
+
+            # Show mappings
+            with st.expander("Column Mappings"):
+                for mapping in mappings:
+                    st.write(f"✓ `{mapping.uploaded_name}` → `{mapping.standard_name}` "
+                            f"(confidence: {mapping.confidence:.0%})")
+
+            # Validate
+            validation = adapter.validate_data(orders_df, mappings)
+
+            if validation.errors:
+                st.error("Data validation failed:")
+                for error in validation.errors:
+                    st.error(f"- {error}")
+                return False
+
+            if validation.warnings:
+                st.warning("Warnings:")
+                for warning in validation.warnings:
+                    st.warning(f"- {warning}")
+
+            if validation.recommendations:
+                with st.expander("Recommendations for Better Analysis"):
+                    for rec in validation.recommendations:
+                        st.info(f"- {rec}")
+
+            # Transform data
+            transformed_df = adapter.transform_data(orders_df, mappings)
+
+            # Store in session state
+            st.session_state.uploaded_data = transformed_df
+            st.session_state.data_profile = profile
+            st.session_state.data_mappings = mappings
+            st.session_state.data_source = 'uploaded'
+
+            # If menu file provided, process it
+            if menu_file:
+                menu_df = pd.read_csv(menu_file)
+                menu_profile = adapter.profile_dataset(menu_df, "menu")
+                menu_mappings = adapter.map_columns(menu_df, menu_profile, target_schema='menu_master')
+                transformed_menu = adapter.transform_data(menu_df, menu_mappings)
+                st.session_state.uploaded_menu = transformed_menu
+
+            return True
+
+    except Exception as e:
+        st.error(f"Error processing data: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
+        return False
+

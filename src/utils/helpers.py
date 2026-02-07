@@ -257,3 +257,181 @@ def calculate_elasticity(
     return quantity_change_pct / price_change_pct
 
 
+# ========== Aggregation Functions ==========
+
+def aggregate_by_category(
+    df: pd.DataFrame,
+    category_col: str,
+    metrics: Dict[str, str]
+) -> pd.DataFrame:
+    """
+    Aggregate metrics by category.
+    
+    Args:
+        df (pd.DataFrame): DataFrame with metrics
+        category_col (str): Column to group by
+        metrics (Dict[str, str]): Map of {output_col: (input_col, agg_func)}
+    
+    Returns:
+        pd.DataFrame: Aggregated results by category
+    
+    Example:
+        >>> df_agg = aggregate_by_category(df, 'category', {
+        ...     'total_revenue': ('revenue', 'sum'),
+        ...     'item_count': ('item_id', 'count'),
+        ... })
+    """
+    return df.groupby(category_col).agg(**{
+        k: (v[0], v[1]) for k, v in metrics.items()
+    }).reset_index()
+
+
+def calculate_running_total(
+    df: pd.DataFrame,
+    value_col: str,
+    sort_col: str = None,
+    ascending: bool = False
+) -> pd.Series:
+    """
+    Calculate cumulative sum (running total) of a column.
+    
+    Useful for ABC analysis (Pareto principle) where you want to find
+    which items account for 80% of sales, etc.
+    
+    Args:
+        df (pd.DataFrame): Input DataFrame
+        value_col (str): Column to sum
+        sort_col (str): Column to sort by (default: value_col)
+        ascending (bool): Sort direction
+    
+    Returns:
+        pd.Series: Cumulative sum values
+    
+    Example:
+        >>> df_sorted = df.sort_values('revenue', ascending=False)
+        >>> cumsum = calculate_running_total(df_sorted, 'revenue')
+        >>> cumsum_pct = (cumsum / cumsum.iloc[-1]) * 100
+    """
+    if sort_col is None:
+        sort_col = value_col
+    
+    sorted_df = df.sort_values(sort_col, ascending=ascending)
+    return sorted_df[value_col].cumsum()
+
+
+def identify_outliers(
+    series: pd.Series,
+    method: str = 'iqr',
+    threshold: float = 1.5
+) -> pd.Series:
+    """
+    Identify outliers in a series.
+    
+    Args:
+        series (pd.Series): Data series
+        method (str): 'iqr' (interquartile range) or 'zscore'
+        threshold (float): For IQR: typically 1.5. For zscore: typically 3.0
+    
+    Returns:
+        pd.Series: Boolean series (True = outlier)
+    
+    Example:
+        >>> outliers = identify_outliers(df['price'])
+        >>> df[~outliers]  # Remove outliers
+    """
+    if method == 'iqr':
+        Q1 = series.quantile(0.25)
+        Q3 = series.quantile(0.75)
+        IQR = Q3 - Q1
+        return (series < Q1 - threshold * IQR) | (series > Q3 + threshold * IQR)
+    
+    elif method == 'zscore':
+        from scipy import stats
+        z_scores = np.abs(stats.zscore(series.dropna()))
+        return z_scores > threshold
+    
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+
+# ========== Report Generation ==========
+
+def generate_summary_report(
+    insights_df: pd.DataFrame,
+    summary_dict: Dict[str, Any]
+) -> str:
+    """
+    Generate a text-based summary report.
+    
+    Args:
+        insights_df (pd.DataFrame): Menu insights DataFrame
+        summary_dict (Dict): Summary statistics
+    
+    Returns:
+        str: Formatted report text
+    
+    Example:
+        >>> report = generate_summary_report(insights, summary)
+        >>> print(report)
+    """
+    report = """
+
+         MENU ENGINEERING ANALYSIS - SUMMARY REPORT                 
+
+
+PERFORMANCE METRICS
+"""
+    
+    report += f"\nTotal Items:           {summary_dict['total_items']:.0f}"
+    report += f"\nTotal Revenue:         {format_dkk(summary_dict['total_revenue'])}"
+    report += f"\nTotal Cost:            {format_dkk(summary_dict['total_cost'])}"
+    report += f"\nTotal Margin:          {format_dkk(summary_dict['total_margin'])}"
+    report += f"\nAverage Margin %:      {format_percentage(summary_dict['average_margin_pct']/100)}"
+    
+    report += "\n\nITEMS BY CATEGORY\n" + "-" * 50
+    
+    for category in ['star', 'plowhorse', 'puzzle', 'dog']:
+        if category in summary_dict['by_category']:
+            cat_data = summary_dict['by_category'][category]
+            report += f"\n{category.upper()}: {cat_data['count']} items"
+            report += f"\n  Revenue: {format_dkk(cat_data['revenue'])}"
+            report += f"\n  Margin:  {format_dkk(cat_data['margin'])}"
+    
+    return report
+
+
+# ========== Data Validation ==========
+
+def validate_dataframe_columns(
+    df: pd.DataFrame,
+    required_columns: List[str],
+    raise_error: bool = True
+) -> bool:
+    """
+    Validate that DataFrame has required columns.
+    
+    Args:
+        df (pd.DataFrame): DataFrame to validate
+        required_columns (List[str]): List of required column names
+        raise_error (bool): If True, raise KeyError on missing columns
+    
+    Returns:
+        bool: True if all columns present, False otherwise
+    
+    Raises:
+        KeyError: If raise_error=True and columns missing
+    
+    Example:
+        >>> validate_dataframe_columns(df, ['id', 'revenue'])
+        True
+    """
+    missing = [col for col in required_columns if col not in df.columns]
+    
+    if missing:
+        msg = f"Missing columns: {missing}. Available: {list(df.columns)}"
+        if raise_error:
+            raise KeyError(msg)
+        return False
+    
+    return True
+

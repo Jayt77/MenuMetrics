@@ -62,3 +62,31 @@ class TestHelpers:
         with pytest.raises(ValueError):
             calculate_percentage_change(0, 100)
     
+    def test_categorize_performance_poor(self):
+        """Test performance categorization for poor performance."""
+        thresholds = {'low': 50, 'medium': 70, 'high': 90}
+        result = categorize_performance(40, thresholds)
+        
+        assert result == 'poor'
+    
+    def test_categorize_performance_fair(self):
+        """Test performance categorization for fair performance."""
+        thresholds = {'low': 50, 'medium': 70, 'high': 90}
+        result = categorize_performance(60, thresholds)
+        
+        assert result == 'fair'
+    
+    def test_categorize_performance_good(self):
+        """Test performance categorization for good performance."""
+        thresholds = {'low': 50, 'medium': 70, 'high': 90}
+        result = categorize_performance(80, thresholds)
+        
+        assert result == 'good'
+    
+    def test_categorize_performance_excellent(self):
+        """Test performance categorization for excellent performance."""
+        thresholds = {'low': 50, 'medium': 70, 'high': 90}
+        result = categorize_performance(95, thresholds)
+        
+        assert result == 'excellent'
+    

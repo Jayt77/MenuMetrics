@@ -55,3 +55,16 @@ class User:
         # Simple validation - students should implement proper validation
         return '@' in self.email and '.' in self.email.split('@')[1]
     
+    def to_dict(self) -> dict:
+        """
+        Converts the user object to a dictionary.
+        
+        Returns:
+            dict: Dictionary representation of the user.
+        """
+        return {
+            'user_id': self.user_id,
+            'username': self.username,
+            'email': self.email,
+            'role': self.role
+        }
