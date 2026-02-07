@@ -1,0 +1,20 @@
+# Python caches and build artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.csv
+# Virtual environments
+.venv/
+venv/
+
+# Local OS/editor artifacts
+.DS_Store
+
+# Local dependency/vendor folders
+node_modules/
+# Project management artifacts
+balance_contributions.py
+COMMIT_PLAN_4_MEMBER.md
+COMMIT_ORDER.md
+COMMIT_MESSAGE.txt
+commit_bundles/
