@@ -74,9 +74,40 @@ python src/main.py --cli --output menu_insights.csv \
 - Data included is sample hackathon data; remove/replace for production.
 
 ## Team & contributions
-- Current git contributors (`git shortlog -sn --all`):
-  - Jayt (3 commits)
-- Action needed: add contributions from all team members per rubric; have each member commit their work with descriptive messages and feature branches.
+
+- **Jayt** (9 commits)
+  - `src/streamlit_dashboard.py` -- Built the main Streamlit dashboard UI and page routing
+  - `src/services/menu_engineering_service.py` -- Implemented BCG classification, pricing optimization, and recommendation engine
+  - `src/models/data_loader.py` -- Developed ETL pipeline and CSV normalization logic
+  - `.streamlit/config.toml`, `requirements.txt` -- Project configuration and dependency management
+
+- **georgenehma** (4 commits)
+  - `src/models/menu_engineering_models.py` -- Defined data models for menu items and analytics outputs
+  - `src/services/inventory_service.py` -- Built inventory tracking and cost analysis service
+  - `src/utils/helpers.py` -- Created shared utility functions for formatting and calculations
+  - `tests/test_helpers.py` -- Wrote unit tests for utility functions
+
+- **selimalyyy** (3 commits)
+  - `src/pages/landing_page.py` -- Designed and implemented the landing page layout
+  - `src/adapters/universal_data_adapter.py` -- Built the universal data adapter for flexible CSV ingestion
+  - `src/api/routes.py` -- Set up API route definitions
+  - `config/sample.env`, `data/` -- Sample environment config and dataset preparation
+
+- **yahiaelbanhawy** (3 commits)
+  - `src/ai/gemini_assistant.py` -- Implemented the AI assistant powered by Gemini/Groq LLM integration
+  - `src/models/user_model.py` -- Created user model for session and preference tracking
+  - `src/main.py` -- Added CLI entry point and AI assistant wiring
+  - `src/streamlit_dashboard.py` -- Integrated AI Assistant page into the dashboard
+
+- **Moustafa Tanbouly** (non-technical)
+  - UI/UX design direction and dashboard layout planning
+  - Business requirements gathering and stakeholder analysis
+  - Presentation design and project documentation
+
+- **Saad El Chourbagei** (non-technical)
+  - Market research and competitive analysis for menu engineering strategies
+  - Business model validation and feature prioritization
+  - Data collection and domain expertise on restaurant operations
 
 ## How to contribute
 1) Branch from `main` (e.g., `feat/pricing-elasticity`).
