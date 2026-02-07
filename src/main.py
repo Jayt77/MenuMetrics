@@ -182,3 +182,99 @@ def run_cli_analysis() -> None:
         print(f"\n[Error] Error during analysis: {e}")
         sys.exit(1)
 
+
+def run_dashboard() -> None:
+    """
+    Launch the Streamlit dashboard for interactive analysis.
+    
+    The dashboard provides a web-based interface for:
+    - Viewing menu performance analytics
+    - Exploring profitability and popularity metrics
+    - Analyzing pricing opportunities
+    - Generating and downloading optimization plans
+    """
+    import subprocess
+    
+    logger.info("Launching Streamlit dashboard...")
+    
+    # Run Streamlit dashboard
+    try:
+        subprocess.run(
+            ["streamlit", "run", "src/streamlit_dashboard.py"],
+            check=True
+        )
+    except FileNotFoundError:
+        logger.error("Streamlit not found. Install with: pip install streamlit")
+        print("\n[Error] Streamlit not installed.")
+        print("Install with: pip install streamlit")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Streamlit error: {e}")
+        sys.exit(1)
+
+
+def main() -> None:
+    """
+    Main entry point with CLI argument parsing.
+    
+    Provides two modes:
+    1. CLI Mode: Batch analysis with CSV output
+    2. Dashboard Mode (default): Interactive web interface
+    
+    Usage:
+        python src/main.py --cli                 # CLI mode
+        python src/main.py                       # Dashboard mode (default)
+        streamlit run src/streamlit_dashboard.py # Direct dashboard launch
+    """
+    parser = argparse.ArgumentParser(
+        description="MenuMetrics Intelligence Platform - Data-driven menu optimization",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Run CLI analysis with defaults
+  python src/main.py --cli
+  
+  # Run CLI analysis and save to custom file
+  python src/main.py --cli --output my_results.csv
+  
+  # Launch interactive dashboard (default)
+  python src/main.py
+  
+  # Direct Streamlit launch
+  streamlit run src/streamlit_dashboard.py
+        """
+    )
+    
+    parser.add_argument(
+        "--cli",
+        action="store_true",
+        help="Run in CLI mode (batch analysis with CSV output)",
+    )
+    
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="menu_insights.csv",
+        help="Output CSV file path for CLI mode (default: menu_insights.csv)",
+    )
+    
+    args = parser.parse_args()
+    
+    # Set output environment variable if provided
+    if args.output:
+        os.environ["MENU_OUTPUT_FILE"] = args.output
+    
+    # Route to appropriate mode
+    if args.cli:
+        run_cli_analysis()
+    else:
+        print("\n" + "="*70)
+        print("  MenuMetrics Intelligence Platform - Dashboard Mode")
+        print("="*70)
+        print("\nLaunching interactive dashboard...")
+        print("Open http://localhost:8501 in your browser")
+        print("\nPress Ctrl+C to stop the server")
+        print("="*70 + "\n")
+        
+        run_dashboard()
+

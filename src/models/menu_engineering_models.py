@@ -132,3 +132,91 @@ class MenuItemInsight:
     revenue_opportunity: float = 0.0
     action_priority: str = "medium"
 
+
+@dataclass
+class PricingOptimization:
+    """
+    Price elasticity and optimization analysis for a menu item.
+    
+    Analyzes price sensitivity based on historical price variation
+    and quantity sold. Recommends optimal pricing to maximize revenue
+    or profit based on business objectives.
+
+    Attributes:
+        menu_item_id (str): Item identifier
+        title (str): Item name
+        current_price (float): Current average price in DKK
+        optimal_price (float): Recommended price in DKK
+        price_elasticity (float): Estimated elasticity coefficient
+        price_change_percent (float): Suggested change as percentage
+        revenue_impact (float): Estimated revenue change in DKK
+        profit_impact (float): Estimated profit change in DKK
+        confidence_level (float): Confidence in recommendation (0-1)
+        rationale (str): Explanation of price recommendation
+        
+    Example:
+        >>> pricing = PricingOptimization(
+        ...     menu_item_id="101",
+        ...     title="Caesar Salad",
+        ...     current_price=35.0,
+        ...     optimal_price=42.0,
+        ...     price_elasticity=-0.8,  # 1% price increase → 0.8% quantity decrease
+        ...     price_change_percent=20.0,
+        ...     revenue_impact=4000,
+        ...     profit_impact=6500,
+        ...     confidence_level=0.72,
+        ...     rationale="High margin, low elasticity suggests pricing power"
+        ... )
+    """
+    menu_item_id: str
+    title: str
+    current_price: float
+    optimal_price: float
+    price_elasticity: float
+    price_change_percent: float
+    revenue_impact: float
+    profit_impact: float
+    confidence_level: float
+    rationale: str = ""
+
+
+@dataclass
+class CustomerBehavior:
+    """
+    Customer purchase behavior analysis for a menu item.
+    
+    Analyzes how customers interact with menu items through purchase
+    patterns, co-purchases, and seasonal trends. Identifies bundling
+    and cross-sell opportunities.
+
+    Attributes:
+        menu_item_id (str): Item identifier
+        title (str): Item name
+        avg_units_per_transaction (float): Average quantity per order
+        repeat_purchase_rate (float): Percentage of repeat customers (0-100)
+        co_purchase_items (List[str]): Frequently bought together item IDs
+        seasonal_index (float): Seasonal strength (1.0 = no seasonality)
+        customer_segments (Dict): Segments likely to purchase this item
+        description_sentiment (str): Sentiment indicators from menu descriptions
+        
+    Example:
+        >>> behavior = CustomerBehavior(
+        ...     menu_item_id="101",
+        ...     title="Caesar Salad",
+        ...     avg_units_per_transaction=1.2,
+        ...     repeat_purchase_rate=65.0,
+        ...     co_purchase_items=["102", "105"],  # Dressing, croutons
+        ...     seasonal_index=1.15,  # Seasonal - higher in summer
+        ...     customer_segments={"health_conscious": 0.85, "lunch_crowd": 0.72},
+        ...     description_sentiment="fresh, healthy, premium"
+        ... )
+    """
+    menu_item_id: str
+    title: str
+    avg_units_per_transaction: float = 1.0
+    repeat_purchase_rate: float = 0.0
+    co_purchase_items: List[str] = field(default_factory=list)
+    seasonal_index: float = 1.0
+    customer_segments: Dict[str, float] = field(default_factory=dict)
+    description_sentiment: str = ""
+

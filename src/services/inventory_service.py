@@ -70,3 +70,42 @@ class InventoryService:
         
         return round(avg_demand, 2)
     
+    def calculate_reorder_point(self, item_id: str, lead_time_days: int = 3) -> int:
+        """
+        Calculates the optimal reorder point for an item.
+        
+        Reorder Point = (Average Daily Demand × Lead Time) + Safety Stock
+        
+        Args:
+            item_id (str): The unique identifier of the item.
+            lead_time_days (int): Number of days for supplier delivery.
+        
+        Returns:
+            int: Recommended reorder point quantity.
+        """
+        daily_demand = self.predict_demand(item_id, 'daily')
+        
+        # Safety stock calculation (simplified - 50% of lead time demand)
+        safety_stock = (daily_demand * lead_time_days) * 0.5
+        
+        reorder_point = (daily_demand * lead_time_days) + safety_stock
+        
+        return int(np.ceil(reorder_point))
+    
+    def identify_expiring_items(self, days_threshold: int = 7) -> pd.DataFrame:
+        """
+        Identifies items that are approaching expiration.
+        
+        Args:
+            days_threshold (int): Number of days before expiration to flag items.
+        
+        Returns:
+            pd.DataFrame: DataFrame containing items near expiration with recommendations.
+        """
+        # This is a placeholder - students should implement actual expiration logic
+        expiring = self.inventory_data[
+            self.inventory_data['days_until_expiration'] <= days_threshold
+        ]
+        
+        return expiring.sort_values('days_until_expiration')
+    
