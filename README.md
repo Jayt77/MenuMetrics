@@ -37,7 +37,7 @@ python -m venv .venv
 . .venv/Scripts/activate   # Windows
 pip install -r requirements.txt
 ```
-2) Data files: ensure `data/Menu Engineering Part 1` and `data/Menu Engineering Part 2` exist (already included in repo snapshot). Also the AI assistant requires the `../order_timeline_data.csv` file for additional capabilities and functionality.
+2) Data files: ensure `data/Menu Engineering Part 1` and `data/Menu Engineering Part 2` exist (already included in repo snapshot). Also the AI assistant requires the `../order_timeline_data.csv` file for additional capabilities and functionality. It can be found in the repo's github releases.
 3) (Optional) set environment variables by copying `config/sample.env` to `.env` and adjusting paths/keys.
 
 ## Usage
