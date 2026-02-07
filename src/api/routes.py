@@ -19,3 +19,24 @@ from src.services.menu_engineering_service import MenuEngineeringService
 
 
 app = Flask(__name__)
+
+
+@app.route('/api/health', methods=['GET'])
+def health_check() -> Dict[str, str]:
+    """
+    Health check endpoint to verify API is running.
+    
+    Returns:
+        Dict[str, str]: Status message.
+    
+    Example Response:
+        {
+            "status": "healthy",
+            "message": "API is running"
+        }
+    """
+    return jsonify({
+        "status": "healthy",
+        "message": "API is running"
+    })
+

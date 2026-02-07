@@ -24,3 +24,24 @@ class User:
         to_dict(): Converts the user object to a dictionary.
     """
     
+    def __init__(self, user_id: str, username: str, email: str, role: str = 'consumer'):
+        """
+        Initialize a new User instance.
+        
+        Args:
+            user_id (str): Unique identifier for the user.
+            username (str): The user's username.
+            email (str): The user's email address.
+            role (str, optional): The user's role. Defaults to 'consumer'.
+        
+        Raises:
+            ValueError: If any required field is empty.
+        """
+        if not all([user_id, username, email]):
+            raise ValueError("User ID, username, and email are required")
+        
+        self.user_id = user_id
+        self.username = username
+        self.email = email
+        self.role = role
+    

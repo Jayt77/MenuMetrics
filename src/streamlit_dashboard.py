@@ -298,3 +298,303 @@ def initialize_session_state():
     if "behavior_analysis" not in st.session_state:
         st.session_state.behavior_analysis = None
 
+
+# ========== Data Loading Functions ==========
+
+@st.cache_resource
+def load_service():
+    """Load MenuEngineeringService (cached)."""
+    try:
+        # Get absolute path to data directory
+        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        data_dir = os.path.join(current_dir, "data")
+        if not os.path.exists(data_dir):
+            return None
+        loader = DataLoader(data_dir)
+        return MenuEngineeringService(loader)
+    except Exception as e:
+        st.error(f"Failed to initialize service: {e}")
+        return None
+
+
+@st.cache_resource
+def load_ai_assistant():
+    """Lazy-load AI assistant with Groq API key"""
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+
+        api_key = os.getenv('GROQ_API_KEY')
+        if not api_key:
+            return None
+
+        from ai.gemini_assistant import GeminiMenuAssistant
+        return GeminiMenuAssistant(api_key=api_key)
+    except Exception as e:
+        logger.error(f"Failed to load AI assistant: {e}")
+        return None
+
+
+def get_show_more_count(key: str, increment: int = 25) -> int:
+    """
+    Get the current show count for a paginated list.
+
+    Args:
+        key: Unique identifier for the list
+        increment: Number of items to show per page
+
+    Returns:
+        Current number of items to show
+    """
+    if key not in st.session_state.show_more_counts:
+        st.session_state.show_more_counts[key] = increment
+    return st.session_state.show_more_counts[key]
+
+
+def show_more_button(key: str, total_items: int, increment: int = 25):
+    """
+    Display a 'Show More' button if there are more items to display.
+
+    Args:
+        key: Unique identifier for the list
+        total_items: Total number of items available
+        increment: Number of items to add when clicked
+    """
+    current_count = get_show_more_count(key, increment)
+
+    if current_count < total_items:
+        remaining = total_items - current_count
+        button_text = f"Show More ({min(remaining, increment)} of {remaining} remaining)"
+
+        if st.button(button_text, key=f"show_more_{key}", use_container_width=True):
+            st.session_state.show_more_counts[key] = current_count + increment
+            st.rerun()
+
+
+def show_loading_overlay(message="Recalculating data, please wait..."):
+    """Display full-screen loading overlay."""
+    st.markdown(f"""
+    <div class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">{message}</div>
+        <div style="margin-top: 10px; color: #666; font-size: 0.9em;">
+            This may take a few moments with large datasets
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+def load_analysis_data(service, profitability_margin=0.20):
+    """Load and analyze menu data with configurable profitability assumptions."""
+    if service is None:
+        st.error("Service not initialized. Check data directory.")
+        return False
+
+    # Show loading overlay
+    placeholder = st.empty()
+    with placeholder.container():
+        show_loading_overlay(f"Loading and analyzing menu data (profit margin: {profitability_margin*100:.0f}%)...")
+
+    try:
+        order_items = service.load_menu_data(
+            "Menu Engineering Part 2/dim_menu_items.csv",
+            "Menu Engineering Part 1/fct_order_items.csv",
+            profitability_margin=profitability_margin
+        )
+
+        insights = service.build_menu_insights(order_items)
+        summary = service.build_summary(insights)
+
+        st.session_state.order_items = order_items
+        st.session_state.insights = insights
+        st.session_state.summary = summary
+        st.session_state.service = service
+
+        # Clear loading overlay
+        placeholder.empty()
+        return True
+    except FileNotFoundError as e:
+        placeholder.empty()
+        st.error(f"Data files not found: {e}")
+        st.info("Please ensure Menu Engineering Part 2 is extracted to data/ directory")
+        return False
+    except Exception as e:
+        placeholder.empty()
+        st.error(f"Error loading data: {e}")
+        return False
+
+
+# ========== Visualization Functions ==========
+
+def create_bcg_matrix_chart(insights, max_points=500):
+    """
+    Create optimized BCG Matrix visualization.
+
+    Performance optimizations:
+    - Samples top N items by revenue for large datasets
+    - Uses WebGL rendering for smooth interaction
+    - Removes text labels (only hover tooltips)
+    - Optimized marker sizes
+
+    Args:
+        insights: DataFrame with menu insights
+        max_points: Maximum number of points to display (default 500)
+    """
+    # Sample data if too large (keep top items by revenue)
+    if len(insights) > max_points:
+        sampled_insights = insights.nlargest(max_points, 'total_revenue')
+        is_sampled = True
+        sampled_count = len(insights) - max_points
+    else:
+        sampled_insights = insights
+        is_sampled = False
+        sampled_count = 0
+
+    fig = go.Figure()
+
+    for category, color, name in [
+        ("star", "#FFD700", "Star"),
+        ("plowhorse", "#45B7D1", "Plowhorse"),
+        ("puzzle", "#4ECDC4", "Puzzle"),
+        ("dog", "#FF6B6B", " Dog"),
+    ]:
+        cat_data = sampled_insights[sampled_insights["category"] == category]
+        if len(cat_data) > 0:
+            fig.add_trace(go.Scattergl(  # WebGL for performance
+                x=cat_data["popularity_score"],
+                y=cat_data["contribution_margin"],
+                mode="markers",  # No text labels for performance
+                name=name,
+                text=cat_data["item_title"],
+                customdata=cat_data[["total_revenue", "order_count"]],
+                marker=dict(
+                    size=np.clip(cat_data["total_revenue"] / 10000 + 5, 5, 20),  # Clipped size
+                    color=color,
+                    opacity=0.7,
+                    line=dict(width=1, color="white"),
+                ),
+                hovertemplate="<b>%{text}</b><br>" +
+                              "Popularity: %{x:.1f}%<br>" +
+                              "Margin: DKK %{y:,.0f}<br>" +
+                              "Revenue: DKK %{customdata[0]:,.0f}<br>" +
+                              "Orders: %{customdata[1]:,.0f}<br>" +
+                              "<extra></extra>",
+            ))
+
+    # Add threshold lines
+    fig.add_hline(
+        y=insights["contribution_margin"].median(),
+        line_dash="dash",
+        line_color="gray",
+        annotation_text="Profit Threshold",
+        annotation_position="right",
+    )
+
+    fig.add_vline(
+        x=insights["popularity_score"].median(),
+        line_dash="dash",
+        line_color="gray",
+        annotation_text="Popularity Threshold",
+        annotation_position="top",
+    )
+
+    # Add sampling notice if applicable
+    title_text = "<b>BCG Matrix: Menu Item Classification</b>"
+    if is_sampled:
+        title_text += f"<br><sub>Showing top {max_points} items by revenue ({sampled_count:,} items hidden for performance)</sub>"
+
+    fig.update_layout(
+        title=title_text,
+        xaxis_title="Popularity Score (%)",
+        yaxis_title="Contribution Margin (DKK)",
+        height=500,
+        hovermode="closest",
+        template="plotly_white",
+        # Performance optimizations
+        dragmode='pan',  # Faster than zoom
+    )
+
+    return fig
+
+
+def create_category_distribution_chart(insights):
+    """Create pie chart of items by category."""
+    category_counts = insights["category"].value_counts()
+    colors = {
+        "star": "#FFD700",
+        "plowhorse": "#45B7D1",
+        "puzzle": "#4ECDC4",
+        "dog": "#FF6B6B",
+    }
+    
+    fig = go.Figure(data=[go.Pie(
+        labels=[cat.upper() for cat in category_counts.index],
+        values=category_counts.values,
+        marker=dict(colors=[colors.get(cat, "#999") for cat in category_counts.index]),
+        hovertemplate="<b>%{label}</b><br>Items: %{value}<extra></extra>",
+    )])
+    
+    fig.update_layout(
+        title="<b>Menu Distribution by Category</b>",
+        height=400,
+    )
+    
+    return fig
+
+
+def create_revenue_by_category_chart(insights):
+    """Create bar chart of revenue and margin by category."""
+    category_data = insights.groupby("category").agg({
+        "total_revenue": "sum",
+        "contribution_margin": "sum",
+    }).reset_index()
+    
+    fig = go.Figure()
+    
+    fig.add_trace(go.Bar(
+        x=category_data["category"].str.upper(),
+        y=category_data["total_revenue"],
+        name="Revenue",
+        marker_color="#3498DB",
+    ))
+    
+    fig.add_trace(go.Bar(
+        x=category_data["category"].str.upper(),
+        y=category_data["contribution_margin"],
+        name="Margin",
+        marker_color="#2ECC71",
+    ))
+    
+    fig.update_layout(
+        title="<b>Revenue & Margin by Category</b>",
+        xaxis_title="Category",
+        yaxis_title="DKK",
+        barmode="group",
+        height=400,
+    )
+    
+    return fig
+
+
+def create_top_items_table(insights, top_n=10):
+    """Create table of top items by revenue."""
+    top_items = insights.nlargest(top_n, "total_revenue")[
+        ["item_title", "category", "total_quantity", "total_revenue", "margin_percentage"]
+    ].copy()
+    
+    top_items = top_items.rename(columns={
+        "item_title": "Item",
+        "category": "Category",
+        "total_quantity": "Units Sold",
+        "total_revenue": "Revenue (DKK)",
+        "margin_percentage": "Margin %",
+    })
+    
+    return top_items
+
+
+def create_pricing_chart(pricing_recs):
+    """Create chart comparing current vs. recommended prices."""
+    if not pricing_recs:
+        return None
+    
+    recs_df = pd.DataFrame([
