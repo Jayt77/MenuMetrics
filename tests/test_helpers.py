@@ -90,3 +90,19 @@ class TestHelpers:
         
         assert result == 'excellent'
     
+    def test_format_currency_default(self):
+        """Test currency formatting with default DKK."""
+        result = format_currency(1250.50)
+        
+        assert result == 'DKK 1,250.50'
+    
+    def test_format_currency_custom(self):
+        """Test currency formatting with custom currency."""
+        result = format_currency(1250.50, 'USD')
+        
+        assert result == 'USD 1,250.50'
+
+
+# Run tests if executed directly
+if __name__ == '__main__':
+    pytest.main([__file__, '-v'])

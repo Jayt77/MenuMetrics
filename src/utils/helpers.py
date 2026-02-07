@@ -435,3 +435,109 @@ def validate_dataframe_columns(
     
     return True
 
+
+
+def calculate_percentage_change(old_value: float, new_value: float) -> float:
+    """
+    Calculates the percentage change between two values.
+    
+    Args:
+        old_value (float): The original value.
+        new_value (float): The new value.
+    
+    Returns:
+        float: Percentage change (positive for increase, negative for decrease).
+    
+    Raises:
+        ValueError: If old_value is zero.
+    """
+    if old_value == 0:
+        raise ValueError("Cannot calculate percentage change when old value is zero")
+    
+    return ((new_value - old_value) / old_value) * 100
+
+
+def filter_by_date_range(df: pd.DataFrame, date_column: str, 
+                         start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    Filters a DataFrame by a date range.
+    
+    Args:
+        df (pd.DataFrame): The DataFrame to filter.
+        date_column (str): Name of the date column.
+        start_date (str): Start date in 'YYYY-MM-DD' format.
+        end_date (str): End date in 'YYYY-MM-DD' format.
+    
+    Returns:
+        pd.DataFrame: Filtered DataFrame.
+    """
+    mask = (df[date_column] >= start_date) & (df[date_column] <= end_date)
+    return df[mask]
+
+
+def categorize_performance(value: float, thresholds: dict) -> str:
+    """
+    Categorizes a performance metric based on defined thresholds.
+    
+    Args:
+        value (float): The value to categorize.
+        thresholds (dict): Dictionary with 'low', 'medium', 'high' threshold values.
+    
+    Returns:
+        str: Performance category ('poor', 'fair', 'good', 'excellent').
+    
+    Example:
+        >>> categorize_performance(75, {'low': 50, 'medium': 70, 'high': 90})
+        'good'
+    """
+    if value < thresholds['low']:
+        return 'poor'
+    elif value < thresholds['medium']:
+        return 'fair'
+    elif value < thresholds['high']:
+        return 'good'
+    else:
+        return 'excellent'
+
+
+def aggregate_by_period(df: pd.DataFrame, date_column: str, 
+                       value_column: str, period: str = 'D') -> pd.DataFrame:
+    """
+    Aggregates data by time period (daily, weekly, monthly).
+    
+    Args:
+        df (pd.DataFrame): The DataFrame to aggregate.
+        date_column (str): Name of the date column.
+        value_column (str): Name of the value column to aggregate.
+        period (str): Period for aggregation ('D' for daily, 'W' for weekly, 'M' for monthly).
+    
+    Returns:
+        pd.DataFrame: Aggregated DataFrame.
+    """
+    df = df.copy()
+    df[date_column] = pd.to_datetime(df[date_column])
+    df.set_index(date_column, inplace=True)
+    
+    aggregated = df[value_column].resample(period).sum().reset_index()
+    
+    return aggregated
+
+
+def format_currency(amount: float, currency: str = 'DKK') -> str:
+    """
+    Formats a monetary value with currency symbol.
+    
+    All monetary values in the dataset are in DKK (Danish Krone).
+    
+    Args:
+        amount (float): The monetary amount.
+        currency (str): Currency code (default: 'DKK').
+    
+    Returns:
+        str: Formatted currency string.
+    
+    Example:
+        >>> format_currency(1250.50)
+        'DKK 1,250.50'
+    """
+    return f"{currency} {amount:,.2f}"

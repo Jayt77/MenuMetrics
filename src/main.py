@@ -278,3 +278,17 @@ Examples:
         
         run_dashboard()
 
+
+if __name__ == "__main__":
+    main()
+
+    for key, value in summary.items():
+        print(f"- {key}: {value:,.2f}" if isinstance(value, float) else f"- {key}: {value}")
+
+    if output_file:
+        service.export_insights(insights, output_file)
+        print(f"Insights exported to {output_file}")
+
+
+if __name__ == "__main__":
+    run_menu_engineering()

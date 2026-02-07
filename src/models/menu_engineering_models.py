@@ -220,3 +220,61 @@ class CustomerBehavior:
     customer_segments: Dict[str, float] = field(default_factory=dict)
     description_sentiment: str = ""
 
+
+@dataclass
+class MenuOptimizationPlan:
+    """
+    Complete menu restructuring recommendations.
+    
+    This is the primary output model that synthesizes all analysis
+    into a coherent, actionable menu optimization plan. Includes
+    specific item changes, pricing adjustments, and promotional strategies.
+
+    Attributes:
+        plan_name (str): Descriptive name for the optimization plan
+        created_date (str): Creation timestamp
+        items_to_promote (List[Dict]): Items that should be promoted (stars)
+        items_to_optimize (List[Dict]): Items to optimize/reposition (plows)
+        items_to_reprice (List[Dict]): Items with recommended price changes
+        items_to_remove (List[Dict]): Items to consider removing (dogs)
+        items_to_redesign (List[Dict]): Items needing recipe/description changes
+        bundling_recommendations (List[Dict]): Suggested item bundles
+        expected_revenue_uplift (float): Projected revenue increase in DKK
+        expected_margin_uplift (float): Projected margin improvement in %
+        implementation_priority (List[str]): Ordered list of actions by impact
+        
+    Example:
+        >>> plan = MenuOptimizationPlan(
+        ...     plan_name="Q1 2026 Menu Optimization",
+        ...     created_date="2026-02-04",
+        ...     items_to_promote=[{"id": "101", "reason": "Star performer"}],
+        ...     items_to_remove=[{"id": "215", "reason": "Dog quadrant"}],
+        ...     expected_revenue_uplift=25000,
+        ...     expected_margin_uplift=5.0,
+        ...     implementation_priority=["Remove dogs", "Increase star visibility", "Adjust pricing"]
+        ... )
+    """
+    plan_name: str
+    created_date: str
+    items_to_promote: List[Dict] = field(default_factory=list)
+    items_to_optimize: List[Dict] = field(default_factory=list)
+    items_to_reprice: List[Dict] = field(default_factory=list)
+    items_to_remove: List[Dict] = field(default_factory=list)
+    items_to_redesign: List[Dict] = field(default_factory=list)
+    bundling_recommendations: List[Dict] = field(default_factory=list)
+    expected_revenue_uplift: float = 0.0
+    expected_margin_uplift: float = 0.0
+    implementation_priority: List[str] = field(default_factory=list)
+    
+    def summary(self) -> str:
+        """Generate a text summary of the optimization plan."""
+        return f"""
+        Plan: {self.plan_name}
+        - Items to Promote: {len(self.items_to_promote)}
+        - Items to Optimize: {len(self.items_to_optimize)}
+        - Items to Reprice: {len(self.items_to_reprice)}
+        - Items to Remove: {len(self.items_to_remove)}
+        - Bundling Opportunities: {len(self.bundling_recommendations)}
+        - Expected Revenue Uplift: DKK {self.expected_revenue_uplift:,.0f}
+        - Expected Margin Improvement: {self.expected_margin_uplift:.1f}%
+        """

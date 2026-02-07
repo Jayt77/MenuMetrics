@@ -164,3 +164,54 @@ def analyze_menu() -> Dict[str, Any]:
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+@app.route('/api/shifts/optimize', methods=['POST'])
+def optimize_shifts() -> Dict[str, Any]:
+    """
+    Optimizes shift scheduling based on demand prediction.
+    
+    Request Body:
+        {
+            "place_id": "string",
+            "date": "YYYY-MM-DD",
+            "constraints": {...}
+        }
+    
+    Returns:
+        Dict[str, Any]: Optimized shift schedule.
+    
+    Example Response:
+        {
+            "date": "2026-02-02",
+            "shifts": [...],
+            "total_staff_hours": 120,
+            "estimated_coverage": 0.95
+        }
+    """
+    try:
+        data = request.get_json()
+        place_id = data.get('place_id')
+        date = data.get('date')
+        
+        if not place_id or not date:
+            return jsonify({"error": "place_id and date are required"}), 400
+        
+        # Students should implement actual shift optimization logic here
+        result = {
+            "place_id": place_id,
+            "date": date,
+            "shifts": [],
+            "total_staff_hours": 120,
+            "estimated_coverage": 0.95,
+            "timestamp": "2026-02-02T12:00:00Z"
+        }
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+if __name__ == '__main__':
+    # Development server - students should use production server for deployment
+    app.run(debug=True, host='0.0.0.0', port=5000)

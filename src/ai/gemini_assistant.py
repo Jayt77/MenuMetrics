@@ -319,3 +319,31 @@ When answering questions:
             logger.error(f"Error in AI assistant: {e}")
             return f"Error: {str(e)}"
 
+    def get_restaurant_summary(self, restaurant_id: int) -> dict:
+        """Get a quick summary of a restaurant's menu"""
+        if self.classification_df is None:
+            return None
+
+        df = self.classification_df
+
+        if 'place_id' in df.columns:
+            df = df[df['place_id'] == restaurant_id]
+
+        if len(df) == 0:
+            return None
+
+        summary = {
+            'total_items': len(df),
+        }
+
+        if 'revenue' in df.columns:
+            summary['total_revenue'] = float(df['revenue'].sum())
+        if 'order_count' in df.columns:
+            summary['total_orders'] = int(df['order_count'].sum())
+        if 'category' in df.columns:
+            summary['categories'] = df['category'].value_counts().to_dict()
+        if 'revenue' in df.columns:
+            top_item = df.nlargest(1, 'revenue').iloc[0].to_dict()
+            summary['top_item'] = top_item
+
+        return summary

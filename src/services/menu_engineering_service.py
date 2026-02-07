@@ -1259,3 +1259,186 @@ class MenuEngineeringService:
         logger.info("Optimization plan generated successfully")
         return plan
 
+    def export_insights(self, insights: pd.DataFrame, output_path: str) -> None:
+        """
+        Export menu insights to CSV file.
+        
+        Args:
+            insights (pd.DataFrame): Menu insights dataframe
+            output_path (str): Output file path
+        """
+        insights.to_csv(output_path, index=False)
+        logger.info(f"Insights exported to {output_path}")
+
+    # ========== Private Helper Methods ==========
+
+    def _resolve_column(
+        self,
+        df: pd.DataFrame,
+        candidates: List[str],
+        optional: bool = False,
+    ) -> Optional[str]:
+        """
+        Find a column name that exists in a dataframe.
+        
+        Tries each candidate in order and returns the first match.
+        Useful for handling flexible naming conventions in real-world data.
+        
+        Args:
+            df (pd.DataFrame): DataFrame to inspect
+            candidates (List[str]): Column names to try
+            optional (bool): If True, return None if no match found
+        
+        Returns:
+            Optional[str]: Resolved column name or None
+        
+        Raises:
+            ValueError: If no match found and optional=False
+        """
+        for candidate in candidates:
+            if candidate in df.columns:
+                return candidate
+        
+        if optional:
+            return None
+        
+        raise ValueError(f"Missing required column. Expected one of: {candidates}")
+
+    def _classify_item(
+        self,
+        row: pd.Series,
+        popularity_threshold: float,
+        margin_threshold: float,
+    ) -> str:
+        """
+        Classify menu item into BCG Matrix quadrant.
+        
+        Uses contribution margin and sales volume thresholds (typically medians)
+        to classify into 4 strategic categories.
+        
+        Args:
+            row (pd.Series): Menu item metrics row
+            popularity_threshold (float): Minimum units for "popular"
+            margin_threshold (float): Minimum DKK for "profitable"
+        
+        Returns:
+            str: Category ("star", "plowhorse", "puzzle", "dog")
+        """
+        is_popular = row["total_quantity"] >= popularity_threshold
+        is_profitable = row["contribution_margin"] >= margin_threshold
+
+        if is_profitable and is_popular:
+            return "star"
+        elif is_profitable and not is_popular:
+            return "plowhorse"
+        elif not is_profitable and is_popular:
+            return "puzzle"
+        else:
+            return "dog"
+
+    def _recommend_action(
+        self,
+        category: str,
+        margin_pct: float,
+        satisfaction: float = 0.0,
+        votes: float = 0.0,
+    ) -> str:
+        """
+        Generate strategic recommendation based on quadrant and customer satisfaction.
+
+        Args:
+            category (str): Menu engineering category
+            margin_pct (float): Margin percentage
+            satisfaction (float): Customer rating (0-5 scale)
+            votes (float): Number of customer ratings for reliability weighting
+
+        Returns:
+            str: Recommended action with satisfaction context
+        """
+        # Base recommendations by category
+        base_actions = {
+            "star": {
+                "no_rating_data": "Protect and promote based on strong performance; collect customer ratings.",
+                "high_satisfaction": "Protect and promote aggressively - customers love this item!",
+                "medium_satisfaction": "Promote with caution - consider quality improvements.",
+                "low_satisfaction": "Investigate quality issues before promoting further."
+            },
+            "plowhorse": {
+                "no_rating_data": "Increase visibility and gather ratings before major recipe changes.",
+                "high_satisfaction": "Increase visibility - customers enjoy it but don't know about it.",
+                "medium_satisfaction": "Increase menu placement and test price increases.",
+                "low_satisfaction": "Consider repositioning or improving recipe before promotion."
+            },
+            "puzzle": {
+                "no_rating_data": "Optimize pricing first and collect ratings to validate customer appeal.",
+                "high_satisfaction": "Optimize recipe/pricing - item is liked but unprofitable.",
+                "medium_satisfaction": "Optimize pricing or bundle with Stars.",
+                "low_satisfaction": "Redesign to improve both profitability and appeal."
+            },
+            "dog": {
+                "no_rating_data": "Remove or redesign based on business metrics; rating signal is unavailable.",
+                "high_satisfaction": "Redesign recipe to reduce costs - customers like the concept.",
+                "medium_satisfaction": "Remove or redesign - low profitability and popularity.",
+                "low_satisfaction": "Remove - unprofitable and disliked by customers."
+            }
+        }
+
+        # Weight rating impact by vote count.
+        # With zero votes, rating has zero influence on the recommendation.
+        votes = max(0.0, float(votes))
+        satisfaction = float(np.clip(satisfaction, 0.0, 5.0))
+
+        if votes <= 0:
+            satisfaction_level = "no_rating_data"
+        else:
+            # Confidence reaches 1.0 at ~100 votes and scales smoothly below that.
+            confidence = min(1.0, np.log1p(votes) / np.log1p(100.0))
+            # Shrink low-confidence ratings toward neutral (2.5/5).
+            adjusted_satisfaction = 2.5 + confidence * (satisfaction - 2.5)
+
+            if adjusted_satisfaction >= 4.0:
+                satisfaction_level = "high_satisfaction"
+            elif adjusted_satisfaction >= 2.5:
+                satisfaction_level = "medium_satisfaction"
+            else:
+                satisfaction_level = "low_satisfaction"
+
+        # Get recommendation
+        if category in base_actions:
+            return base_actions[category].get(satisfaction_level, "Monitor performance")
+
+        return "Monitor performance"
+
+    def _price_hint(self, category: str, avg_price: float, margin_pct: float) -> str:
+        """
+        Generate pricing guidance.
+        
+        Args:
+            category (str): Menu category
+            avg_price (float): Average selling price
+            margin_pct (float): Margin percentage
+        
+        Returns:
+            str: Pricing guidance
+        """
+        if avg_price <= 0:
+            return "Price data missing. Validate source."
+        
+        hints = {
+            "star": f"Maintain or increase pricing. Current avg: {self.currency} {avg_price:.2f}",
+            "plowhorse": f"Test +5% to +8% increases (current: {self.currency} {avg_price:.2f})",
+            "puzzle": f"Bundle or offer at {self.currency} {avg_price*0.95:.2f} to drive volume",
+            "dog": "Don't discount further. Focus on cost reduction.",
+        }
+        return hints.get(category, "Monitor and adjust based on demand")
+
+    def _pricing_rationale(self, elasticity: float, confidence: float) -> str:
+        """Generate rationale for pricing recommendation."""
+        if confidence < 0.4:
+            return "Low confidence in recommendation. Suggest A/B test pricing."
+        elif abs(elasticity) < 0.8:
+            return "Low price sensitivity indicates pricing power. Consider increases."
+        elif abs(elasticity) > 1.2:
+            return "High price sensitivity. Monitor closely for demand changes."
+        else:
+            return "Moderate price sensitivity. Gradual price testing recommended."

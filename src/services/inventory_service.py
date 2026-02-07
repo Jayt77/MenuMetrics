@@ -109,3 +109,23 @@ class InventoryService:
         
         return expiring.sort_values('days_until_expiration')
     
+    def generate_recommendations(self, item_id: str) -> Dict[str, any]:
+        """
+        Generates comprehensive inventory recommendations for an item.
+        
+        Args:
+            item_id (str): The unique identifier of the item.
+        
+        Returns:
+            Dict[str, any]: Dictionary containing recommendations and metrics.
+        """
+        recommendations = {
+            'item_id': item_id,
+            'predicted_daily_demand': self.predict_demand(item_id, 'daily'),
+            'predicted_weekly_demand': self.predict_demand(item_id, 'weekly'),
+            'reorder_point': self.calculate_reorder_point(item_id),
+            'status': 'optimal',  # Students should implement status logic
+            'action': 'monitor'   # Students should implement action recommendations
+        }
+        
+        return recommendations

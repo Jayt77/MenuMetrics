@@ -399,3 +399,27 @@ class UniversalDataAdapter:
             warnings=warnings,
             recommendations=recommendations
         )
+
+    def transform_data(self, df: pd.DataFrame, mappings: List[ColumnMapping]) -> pd.DataFrame:
+        """
+        Transform uploaded data to standard schema.
+
+        Args:
+            df: Uploaded DataFrame
+            mappings: Column mappings
+
+        Returns:
+            Transformed DataFrame with standard column names
+        """
+        logger.info("Transforming data to standard schema")
+
+        # Create rename dictionary
+        rename_map = {m.uploaded_name: m.standard_name for m in mappings}
+
+        # Select and rename mapped columns
+        transformed = df[list(rename_map.keys())].copy()
+        transformed = transformed.rename(columns=rename_map)
+
+        logger.info(f"Transformation complete: {len(transformed)} rows, {len(transformed.columns)} columns")
+
+        return transformed

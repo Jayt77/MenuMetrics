@@ -2098,3 +2098,669 @@ def generate_vibrant_menu(items_df: pd.DataFrame) -> str:
             box-shadow: 0 30px 80px rgba(0,0,0,0.3);
         }
 
+        .hero {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 70px 50px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 10%, transparent 40%);
+            animation: pulse 15s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        h1 {
+            font-size: 4.5em;
+            font-weight: 800;
+            position: relative;
+            z-index: 1;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.2);
+            margin-bottom: 15px;
+        }
+
+        .slogan {
+            font-size: 1.4em;
+            font-weight: 400;
+            position: relative;
+            z-index: 1;
+            opacity: 0.95;
+        }
+
+        .menu-body {
+            padding: 60px 50px;
+        }
+
+        .category {
+            margin-bottom: 55px;
+        }
+
+        .cat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 50px;
+            margin-bottom: 30px;
+            display: inline-block;
+            font-size: 1.6em;
+            font-weight: 700;
+            box-shadow: 0 8px 20px rgba(102,126,234,0.4);
+        }
+
+        .dish {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 25px;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 20%);
+            border-radius: 15px;
+            transition: all 0.3s ease;
+            border-left: 5px solid transparent;
+        }
+
+        .dish:hover {
+            transform: translateX(10px);
+            border-left-color: #f5576c;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .dish-name {
+            font-size: 1.35em;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .star-badge {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.7em;
+            margin-left: 15px;
+            font-weight: 700;
+            box-shadow: 0 4px 10px rgba(245,87,108,0.3);
+        }
+
+        .price {
+            font-size: 1.5em;
+            font-weight: 800;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .footer {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 35px;
+            text-align: center;
+            font-size: 1.05em;
+        }
+
+        @media print {
+            body { background: white; padding: 0; }
+            .menu { box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="menu">
+        <div class="hero">
+            <h1>MenuMetrics</h1>
+            <div class="slogan">Where Taste Meets Intelligence</div>
+        </div>
+        <div class="menu-body">
+"""
+
+    cat_map = {
+        "star": {"name": "Star Signature Stars", "badge": "CHEF'S CHOICE"},
+        "plowhorse": {"name": "Premium Hidden Gems", "badge": "FAN FAVORITE"},
+        "puzzle": {"name": "[Design] Creative Delights", "badge": "UNIQUE"}
+    }
+
+    for cat, info in cat_map.items():
+        items = items_df[items_df["category"] == cat]
+        if len(items) == 0:
+            continue
+
+        html += f'            <div class="category">\n'
+        html += f'                <div class="cat-header">{info["name"]}</div>\n'
+
+        for _, item in items.head(15).iterrows():
+            badge = f'<span class="star-badge">{info["badge"]}</span>' if cat == "star" else ""
+            html += f'                <div class="dish">\n'
+            html += f'                    <div class="dish-name">{item["item_title"]}{badge}</div>\n'
+            html += f'                    <div class="price">{item["avg_price"]:.2f} DKK</div>\n'
+            html += f'                </div>\n'
+
+        html += '            </div>\n'
+
+    html += f"""
+        </div>
+        <div class="footer">
+            Optimized with MenuMetrics Intelligence | {datetime.now().strftime('%B %Y')}
+        </div>
+    </div>
+</body>
+</html>
+"""
+    return html
+
+
+def generate_menu_html(items_df: pd.DataFrame) -> str:
+    """
+    Generate a professional HTML menu from the filtered items.
+
+    Creates a visually appealing, print-ready HTML menu with:
+    - Professional styling
+    - Category grouping
+    - Pricing display
+    - Responsive design
+
+    Args:
+        items_df (pd.DataFrame): Filtered menu items
+
+    Returns:
+        str: HTML markup for the menu
+    """
+    html = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MenuMetrics Optimized Menu</title>
+    <style>
+        body {
+            font-family: 'Georgia', serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: #f8f9fa;
+        }
+        .menu-container {
+            background: white;
+            padding: 40px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            border-bottom: 3px solid #e74c3c;
+            padding-bottom: 20px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 1.1em;
+            margin-bottom: 40px;
+            font-style: italic;
+        }
+        .category-section {
+            margin-bottom: 40px;
+        }
+        .category-title {
+            font-size: 1.8em;
+            color: #e74c3c;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 10px;
+        }
+        .menu-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding: 10px 0;
+            border-bottom: 1px dotted #ddd;
+        }
+        .item-name {
+            font-weight: bold;
+            color: #2c3e50;
+            flex: 1;
+        }
+        .item-price {
+            color: #27ae60;
+            font-weight: bold;
+            margin-left: 20px;
+        }
+        .star-badge {
+            background: #FFD700;
+            color: #2c3e50;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+        @media print {
+            body { background: white; }
+            .menu-container { box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="menu-container">
+        <h1>MenuMetrics</h1>
+        <div class="subtitle">Optimized for Quality & Profitability</div>
+"""
+
+    # Group by category
+    for category in ["star", "plowhorse", "puzzle"]:
+        cat_items = items_df[items_df["category"] == category]
+        if len(cat_items) == 0:
+            continue
+
+        category_names = {
+            "star": "Star Chef's Recommendations",
+            "plowhorse": "Star Hidden Gems",
+            "puzzle": "Popular Customer Favorites",
+        }
+
+        html += f'        <div class="category-section">\n'
+        html += f'            <div class="category-title">{category_names.get(category, category.title())}</div>\n'
+
+        for _, item in cat_items.iterrows():
+            badge = '<span class="star-badge">Star BEST SELLER</span>' if category == "star" else ""
+            html += f'            <div class="menu-item">\n'
+            html += f'                <span class="item-name">{item["item_title"]}{badge}</span>\n'
+            html += f'                <span class="item-price">DKK {item["avg_price"]:.2f}</span>\n'
+            html += f'            </div>\n'
+
+        html += '        </div>\n'
+
+    html += f"""
+        <div class="footer">
+            Generated by MenuMetrics Intelligence Platform<br>
+            Optimized on {datetime.now().strftime('%Y-%m-%d')}
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+    return html
+
+
+def generate_menu_text(items_df: pd.DataFrame) -> str:
+    """
+    Generate a plain text menu from the filtered items.
+
+    Args:
+        items_df (pd.DataFrame): Filtered menu items
+
+    Returns:
+        str: Plain text menu
+    """
+    text = """
+
+                    FLAVORCRAFT OPTIMIZED MENU                      
+
+
+"""
+
+    text += f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+    text += f"Total Items: {len(items_df)}\n"
+    text += f"Average Margin: {items_df['margin_percentage'].mean():.1f}%\n\n"
+
+    for category in ["star", "plowhorse", "puzzle"]:
+        cat_items = items_df[items_df["category"] == category]
+        if len(cat_items) == 0:
+            continue
+
+        category_names = {
+            "star": "Star CHEF'S RECOMMENDATIONS",
+            "plowhorse": "Star HIDDEN GEMS",
+            "puzzle": "Popular CUSTOMER FAVORITES",
+        }
+
+        text += "="*70 + "\n"
+        text += f"{category_names.get(category, category.upper())}\n"
+        text += "="*70 + "\n\n"
+
+        for _, item in cat_items.iterrows():
+            text += f"{item['item_title']:<50} DKK {item['avg_price']:>8.2f}\n"
+            text += f"  Margin: {item['margin_percentage']:.1f}%\n\n"
+
+    text += "\n" + "="*70 + "\n"
+    text += "Menu optimized using MenuMetrics Intelligence Platform\n"
+    text += "Powered by Data-Driven Decision Making\n"
+    text += "="*70 + "\n"
+
+    return text
+
+
+def page_ai_assistant():
+    """AI Assistant chat interface tab"""
+    st.header("AI Menu Assistant")
+
+    # Check if data is loaded
+    if st.session_state.insights is None:
+        st.warning("Please load data first to use the AI Assistant")
+        st.info("Navigate to the Overview tab and load your menu data")
+        return
+
+    # Initialize assistant if needed
+    if st.session_state.ai_assistant is None:
+        with st.spinner("Initializing AI assistant..."):
+            st.session_state.ai_assistant = load_ai_assistant()
+
+    # Check if assistant loaded successfully
+    if st.session_state.ai_assistant is None:
+        st.error("AI Assistant not available. Please set GROQ_API_KEY in .env file")
+        st.info("Get your free API key at: https://console.groq.com")
+        st.code("GROQ_API_KEY=your_key_here", language="bash")
+        return
+
+    # Show context info
+    insights = st.session_state.insights
+    summary = st.session_state.summary
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Items", summary['total_items'])
+    with col2:
+        st.metric("Total Revenue", f"DKK {summary['total_revenue']:,.0f}")
+    with col3:
+        st.metric("Total Margin", f"DKK {summary['total_margin']:,.0f}")
+    with col4:
+        st.metric("Avg Margin %", f"{summary['average_margin_pct']:.1f}%")
+
+    st.divider()
+
+    # Quick questions row
+    st.subheader("Quick Questions")
+    col1, col2, col3, col4 = st.columns(4)
+
+    quick_questions = [
+        "What are my top performers?",
+        "Which items should I remove?",
+        "Price optimization tips",
+        "Revenue summary"
+    ]
+
+    # Handle quick question buttons
+    for i, (col, question) in enumerate(zip([col1, col2, col3, col4], quick_questions)):
+        with col:
+            if st.button(question, key=f"quick_{i}", use_container_width=True):
+                # Add to chat history
+                st.session_state.chat_history.append({"role": "user", "content": question})
+
+                # Get AI response
+                with st.spinner("Thinking..."):
+                    answer = st.session_state.ai_assistant.ask(
+                        question=question,
+                        classification_df=insights
+                    )
+                    st.session_state.chat_history.append({"role": "assistant", "content": answer})
+                st.rerun()
+
+    st.divider()
+
+    # Chat history display
+    chat_container = st.container()
+
+    with chat_container:
+        for message in st.session_state.chat_history:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+    # Chat input
+    if prompt := st.chat_input("Ask about your menu..."):
+        # Add user message
+        st.session_state.chat_history.append({"role": "user", "content": prompt})
+
+        # Process with AI
+        with st.spinner("Thinking..."):
+            # Call assistant with insights data
+            answer = st.session_state.ai_assistant.ask(
+                question=prompt,
+                classification_df=insights
+            )
+
+            # Add assistant response
+            st.session_state.chat_history.append({"role": "assistant", "content": answer})
+
+        # Rerun to display new messages
+        st.rerun()
+
+    # Clear chat button
+    if len(st.session_state.chat_history) > 0:
+        st.divider()
+        if st.button("Clear Chat History", use_container_width=True):
+            st.session_state.chat_history = []
+            st.rerun()
+
+
+def page_data_loading():
+    """Data loading and configuration tab."""
+    st.header(" Data Loading & Configuration")
+    
+    st.write("MenuMetrics Intelligence Platform analyzes Menu Engineering datasets.")
+    
+    st.subheader("Required Files")
+    st.write("""
+    Please ensure the following files are present in `data/`:
+    - `Menu Engineering Part 2/dim_menu_items.csv` - Menu item master data
+    - `Menu Engineering Part 2/fct_order_items.csv` - Order transaction data
+    
+    Expected columns in data:
+    - **dim_menu_items**: id/menu_item_id, title, price, status
+    - **fct_order_items**: menu_item_id/item_id, quantity, price, cost
+    """)
+    
+    st.divider()
+    
+    # Data loading section
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.subheader("Load Menu Data")
+        st.write("Click the button to load and analyze your menu data.")
+    
+    with col2:
+        if st.button(" Load & Analyze Data", use_container_width=True, type="primary"):
+            success = load_analysis_data(st.session_state.service, st.session_state.profitability_margin)
+            if success:
+                st.success("Yes Data loaded and analyzed successfully!")
+                st.rerun()
+    
+    st.divider()
+    
+    # Data status
+    st.subheader("Data Status")
+    
+    if st.session_state.insights is None:
+        st.warning("No data loaded yet. Click the button above to load data.")
+    else:
+        insights = st.session_state.insights
+        summary = st.session_state.summary
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Items Analyzed", summary["total_items"])
+        with col2:
+            st.metric("Transactions", f"{len(st.session_state.order_items):,}")
+        with col3:
+            st.metric("Data Freshness", "Current")
+        
+        st.success("Yes Data loaded and ready for analysis")
+        
+        # Show data quality info
+        st.subheader("Data Quality Summary")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.write(f"**Total Revenue**: DKK {summary['total_revenue']:,.0f}")
+        with col2:
+            st.write(f"**Total Margin**: DKK {summary['total_margin']:,.0f}")
+        with col3:
+            st.write(f"**Avg Margin %**: {summary['average_margin_pct']:.1f}%")
+
+
+# ========== Main Application ==========
+
+def main():
+    """Main Streamlit application."""
+    initialize_session_state()
+
+    # Check if data is loaded - if not, show ONLY landing page
+    if st.session_state.data_source is None:
+        # Hide sidebar and menu completely
+        st.markdown("""
+        <style>
+            [data-testid="stSidebar"] {
+                display: none;
+            }
+            [data-testid="collapsedControl"] {
+                display: none;
+            }
+            #MainMenu {
+                visibility: hidden;
+            }
+            header {
+                visibility: hidden;
+            }
+            footer {
+                visibility: hidden;
+            }
+        </style>
+        """, unsafe_allow_html=True)
+
+        # Show landing page only
+        show_landing_page()
+        return  # Don't show anything else (landing page handles rerun)
+
+    # Data is loaded - show full dashboard with sidebar
+    # Show sidebar
+    st.markdown("""
+    <style>
+        [data-testid="stSidebar"] {
+            display: block;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Sidebar - App Logo/Name (Sparrow style)
+    st.sidebar.markdown("""
+    <div style="padding: 1rem 0 1.5rem 0; border-bottom: 1px solid #E5E7EB; margin-bottom: 1.5rem;">
+        <div style="font-size: 22px; font-weight: 700; color: #1F2937;">MenuMetrics</div>
+        <div style="font-size: 13px; color: #6B7280; margin-top: 4px;">Intelligence Platform</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Data source indicator
+    if st.session_state.data_source == 'uploaded':
+        st.sidebar.success("Using: Uploaded Data")
+    elif st.session_state.data_source == 'sample':
+        st.sidebar.info("Using: Sample Data")
+
+    # Add "Upload New Data" button
+    if st.sidebar.button("Upload New Data", use_container_width=True):
+        # Reset data source to show landing page
+        st.session_state.data_source = None
+        st.session_state.uploaded_data = None
+        st.session_state.service = None
+        st.rerun()
+
+    st.sidebar.divider()
+
+    # Profitability Assumptions Section
+    st.sidebar.subheader("Profitability Assumptions")
+
+    profitability_pct = st.sidebar.slider(
+        "Assumed Profit Margin %",
+        min_value=5.0,
+        max_value=70.0,
+        value=st.session_state.profitability_margin * 100,
+        step=5.0,
+        help="Adjust assumed profitability for items without cost data. Default is 20%. Higher margins mean lower estimated costs."
+    )
+
+    # Convert to decimal
+    profitability_margin = profitability_pct / 100
+
+    # Trigger recalculation if margin changed
+    if abs(profitability_margin - st.session_state.profitability_margin) > 0.001:
+        st.session_state.profitability_margin = profitability_margin
+        # Clear ALL cached data to force complete recalculation
+        st.session_state.insights = None
+        st.session_state.summary = None
+        st.session_state.order_items = None
+        st.session_state.pricing_recs = None
+        st.session_state.optimization_plan = None
+        st.session_state.language_analysis = None
+        st.session_state.behavior_analysis = None
+        st.sidebar.success(f"Recalculating with {profitability_pct:.0f}% margin...")
+        st.rerun()
+
+    st.sidebar.divider()
+
+    # Initialize service and load data
+    if st.session_state.service is None:
+        st.session_state.service = load_service()
+
+    # Auto-load insights for sample data (with current profitability assumption)
+    if st.session_state.data_source == 'sample' and st.session_state.insights is None:
+        if st.session_state.service is not None:
+            load_analysis_data(st.session_state.service, st.session_state.profitability_margin)
+
+    # Navigation
+    page = st.sidebar.radio(
+        "Navigation",
+        ["Overview", "Category Analysis", "Pricing", "Optimization Plan", "Menu Generator", "Menu Language", "Customer Insights", "AI Assistant"],
+        label_visibility="collapsed",
+    )
+
+    # Route to pages (handle icons in page names)
+    if "Overview" in page:
+        page_overview()
+    elif "Category Analysis" in page:
+        page_category_analysis()
+    elif "Pricing" in page:
+        page_pricing_analysis()
+    elif "Optimization Plan" in page:
+        page_optimization_plan()
+    elif "Menu Generator" in page:
+        page_menu_generator()
+    elif "Menu Language" in page:
+        page_menu_language_analysis()
+    elif "Customer Insights" in page:
+        page_customer_insights()
+    elif "AI Assistant" in page:
+        page_ai_assistant()
+
+    # Footer
+    st.sidebar.divider()
+    st.sidebar.markdown("""
+    <div style="padding: 1rem 0; color: #6B7280; font-size: 13px;">
+        <div style="margin-bottom: 0.5rem;">
+            <strong style="color: #1F2937;">Version:</strong> 1.0.0
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.sidebar.caption("MenuMetrics Intelligence | Deloitte x AUC Hackathon 2026")
+
+
+if __name__ == "__main__":
+    main()

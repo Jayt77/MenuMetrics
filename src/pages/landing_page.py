@@ -390,3 +390,38 @@ def process_uploaded_data(orders_file, menu_file=None) -> bool:
         st.code(traceback.format_exc())
         return False
 
+
+def load_sample_data() -> bool:
+    """
+    Load sample data from the project's data directory.
+
+    Returns:
+        True if loading successful
+    """
+    try:
+        with st.spinner("Loading sample data..."):
+            # Check if sample data exists
+            # Get absolute path to project root
+            current_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            sample_orders_path = os.path.join(current_dir, "data", "Menu Engineering Part 1", "fct_order_items.csv")
+            sample_menu_path = os.path.join(current_dir, "data", "Menu Engineering Part 2", "dim_menu_items.csv")
+
+            if not os.path.exists(sample_orders_path):
+                st.error(f"Sample data not found at: {sample_orders_path}\n\nPlease upload your own data.")
+                return False
+
+            # Mark as using sample data - dashboard will handle loading
+            st.session_state.data_source = 'sample'
+
+            # Clear any uploaded data
+            st.session_state.uploaded_data = None
+            st.session_state.uploaded_menu = None
+            st.session_state.data_profile = None
+            st.session_state.data_mappings = None
+
+            st.success("Sample data selected! Loading dashboard...")
+            return True
+
+    except Exception as e:
+        st.error(f"Error loading sample data: {str(e)}")
+        return False

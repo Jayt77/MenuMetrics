@@ -439,3 +439,72 @@ class DataLoader:
         logger.info(f"Bill of Materials: {len(data['bill_of_materials']):,}")
         logger.info("="*60)
         
+        return data
+    
+    def merge_datasets(
+        self,
+        left_df: pd.DataFrame,
+        right_df: pd.DataFrame,
+        on: str,
+        how: str = 'inner'
+    ) -> pd.DataFrame:
+        """
+        Merge two datasets on a common key with validation.
+        
+        This method implements safe merging practices:
+        - Validates key column existence
+        - Reports merge statistics
+        - Detects data loss from inner joins
+        
+        Args:
+            left_df (pd.DataFrame): Left dataset
+            right_df (pd.DataFrame): Right dataset
+            on (str): Column name to merge on (must exist in both)
+            how (str): Merge type ('inner', 'left', 'right', 'outer'). Defaults to 'inner'.
+        
+        Returns:
+            pd.DataFrame: Merged dataset
+        
+        Raises:
+            ValueError: If merge key does not exist in either dataset
+        
+        Example:
+            >>> menu = loader.load_menu_items()
+            >>> orders = loader.load_order_items()
+            >>> merged = loader.merge_datasets(orders, menu, on='menu_item_id', how='left')
+        """
+        # Validate merge key exists
+        if on not in left_df.columns:
+            raise ValueError(f"Merge key '{on}' not found in left dataset")
+        if on not in right_df.columns:
+            raise ValueError(f"Merge key '{on}' not found in right dataset")
+        
+        # Perform merge
+        result = pd.merge(left_df, right_df, on=on, how=how)
+        
+        # Report statistics
+        left_size = left_df[on].nunique()
+        right_size = right_df[on].nunique()
+        result_size = result[on].nunique()
+        
+        logger.info(
+            f"Merged {how}: {left_size:,} + {right_size:,} -> "
+            f"{result_size:,} ({len(result):,} rows)"
+        )
+        
+        # Warn about data loss in inner joins
+        if how == 'inner' and result_size < min(left_size, right_size):
+            loss = min(left_size, right_size) - result_size
+            logger.warning(f"Inner join dropped {loss} keys ({(loss/max(left_size, right_size)*100):.1f}%)")
+        
+        return result
+    
+    def clear_cache(self):
+        """Clear the in-memory cache to free memory."""
+        self._cache.clear()
+        logger.info("Cache cleared")
+    
+    def get_cache_info(self) -> Dict[str, int]:
+        """Get information about cached datasets."""
+        return {name: len(df) for name, df in self._cache.items()}
+
