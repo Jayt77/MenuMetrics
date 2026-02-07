@@ -122,10 +122,5 @@ python src/main.py --cli --output menu_insights.csv \
 2) Commit with clear messages (`feat:`, `fix:`, `docs:`, `test:` prefixes encouraged).
 3) Open PR; request review from another team member.
 
-## Known gaps vs requirements
-- Single-contributor history; needs balanced commits by team.
-- Tests minimal; expand coverage for services and dashboard logic.
-- Screenshots are placeholders; replace with real captures from the running dashboard before submission.
-
 ## License
 MIT
