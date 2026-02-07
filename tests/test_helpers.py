@@ -41,3 +41,24 @@ class TestHelpers:
         assert result.month == 1
         assert result.day == 1
     
+    def test_calculate_percentage_change_increase(self):
+        """Test percentage change calculation for increase."""
+        old_value = 100
+        new_value = 150
+        result = calculate_percentage_change(old_value, new_value)
+        
+        assert result == 50.0
+    
+    def test_calculate_percentage_change_decrease(self):
+        """Test percentage change calculation for decrease."""
+        old_value = 200
+        new_value = 150
+        result = calculate_percentage_change(old_value, new_value)
+        
+        assert result == -25.0
+    
+    def test_calculate_percentage_change_zero_old_value(self):
+        """Test that zero old value raises ValueError."""
+        with pytest.raises(ValueError):
+            calculate_percentage_change(0, 100)
+    

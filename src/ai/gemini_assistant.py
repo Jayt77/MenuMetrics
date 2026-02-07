@@ -96,3 +96,79 @@ class GeminiMenuAssistant:
 
         logger.info(f"Groq Assistant ready! {len(self.datasets)} datasets loaded")
 
+    def _create_data_context(self):
+        """Create a summary of the data for AI context"""
+        if self.classification_df is None or len(self.classification_df) == 0:
+            self.data_context = "No classification data available."
+            return
+
+        df = self.classification_df
+
+        # Overall stats
+        total_items = len(df)
+        total_restaurants = df['place_id'].nunique() if 'place_id' in df.columns else 0
+        total_revenue = df['revenue'].sum() if 'revenue' in df.columns else 0
+        total_orders = df['order_count'].sum() if 'order_count' in df.columns else 0
+
+        # Category breakdown
+        if 'category' in df.columns:
+            category_stats = df.groupby('category').agg({
+                'item_id': 'count',
+                'revenue': 'sum',
+                'order_count': 'sum'
+            })
+        else:
+            category_stats = pd.DataFrame()
+
+        # Build list of available datasets
+        dataset_info = "\n".join([f"   - {name}: {len(data):,} rows, columns: {', '.join(data.columns.tolist()[:10])}"
+                                  for name, data in list(self.datasets.items())[:15]])
+
+        # Build context string
+        self.data_context = f"""
+You are a menu engineering expert analyzing restaurant data. Here's the dataset overview:
+
+CLASSIFICATION SUMMARY:
+- Total menu items: {total_items:,}
+- Total restaurants: {total_restaurants}
+- Total revenue: {total_revenue:,.0f} DKK
+- Total orders: {total_orders:,}
+
+MENU ENGINEERING CATEGORIES:
+The items are classified into 4 categories based on profitability and popularity:
+
+1. STARS (High Profit + High Popularity): Best performers - promote heavily, maintain quality
+
+2. PLOWHORSES (Low Profit + High Popularity): Popular but less profitable - consider price increases
+
+3. PUZZLES (High Profit + Low Popularity): Profitable but underordered - need better marketing
+
+4. DOGS (Low Profit + Low Popularity): Remove or redesign these items
+
+CUSTOMER SATISFACTION METRICS:
+- Customer ratings are available on a 0-5 star scale
+- Items have associated vote counts indicating reliability
+- High-rated items (4+ stars) should be prioritized in recommendations
+- Low-rated items (<3 stars) may have quality issues even if profitable
+
+AVAILABLE DATASETS ({len(self.datasets)} total):
+{dataset_info}
+
+CRITICAL RULES:
+1. **NEVER make up SQL queries** - You don't have database access, only the context data provided above
+2. **NEVER invent products, items, or data** - Only reference items explicitly shown in the context
+3. **ONLY use data provided in the context** - If you see timeline data with specific items and counts, USE THAT EXACT DATA
+4. **If you don't have specific information, say "I don't have that data" instead of guessing**
+5. **Timeline data format**: When you see "12:00 [Pizza (78), Pasta (54)]", those are REAL items with REAL counts from the data
+6. **NEVER fabricate**: Don't make up items not in the provided context
+7. **RESTAURANT-SPECIFIC DATA ONLY**: When answering about a specific restaurant, ONLY reference items from that restaurant's context
+
+NEVER say you don't have access to these datasets. You DO have them. Use them to answer questions!
+
+When answering questions:
+- Provide specific numbers and examples from the data
+- Reference multiple datasets when relevant
+- Calculate insights using the available data
+- Give actionable recommendations
+- Use the menu engineering framework to explain insights
+"""

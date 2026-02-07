@@ -332,3 +332,624 @@ class MenuEngineeringService:
         logger.info(f"Prepared {len(merged):,} clean order items for analysis")
         return merged
 
+    def load_satisfaction_metrics(self, menu_items: pd.DataFrame) -> pd.DataFrame:
+        """
+        Extract and normalize customer satisfaction metrics from menu items.
+
+        This method:
+        - Normalizes rating from 0-120 scale to 0-5 star scale
+        - Calculates satisfaction score weighted by vote count
+        - Returns DataFrame ready for merging with insights
+
+        Args:
+            menu_items (pd.DataFrame): Menu items with rating and votes columns
+
+        Returns:
+            pd.DataFrame: Satisfaction metrics with columns:
+                - menu_item_id: Item identifier
+                - rating_normalized: Rating on 0-5 scale
+                - votes: Number of customer votes
+                - satisfaction_score: Weighted score (rating × log(votes+1))
+        """
+        logger.info("Loading customer satisfaction metrics...")
+
+        # Resolve column names
+        menu_id_col = self._resolve_column(menu_items, ["id", "menu_item_id", "item_id"])
+        rating_col = self._resolve_column(menu_items, ["rating"], optional=True)
+        votes_col = self._resolve_column(menu_items, ["votes"], optional=True)
+
+        if not rating_col or not votes_col:
+            logger.warning("Rating or votes column not found - satisfaction metrics unavailable")
+            return None
+
+        # Extract satisfaction data
+        satisfaction_df = menu_items[[menu_id_col, rating_col, votes_col]].copy()
+        satisfaction_df = satisfaction_df.rename(columns={
+            menu_id_col: "menu_item_id",
+            rating_col: "rating_raw",
+            votes_col: "votes_raw"
+        })
+
+        # Normalize rating from 0-120 to 0-5 scale
+        satisfaction_df["rating_normalized"] = pd.to_numeric(
+            satisfaction_df["rating_raw"], errors='coerce'
+        ) / 24.0  # 120 / 5 = 24
+
+        # Ensure votes is numeric
+        satisfaction_df["votes"] = pd.to_numeric(satisfaction_df["votes_raw"], errors='coerce')
+
+        # Calculate satisfaction score: rating × log(votes + 1)
+        # This gives more weight to items with many votes
+        satisfaction_df["satisfaction_score"] = (
+            satisfaction_df["rating_normalized"] * np.log1p(satisfaction_df["votes"])
+        )
+
+        # Drop original raw columns
+        satisfaction_df = satisfaction_df.drop(columns=["rating_raw", "votes_raw"], errors='ignore')
+
+        # Fill NaN values
+        satisfaction_df["rating_normalized"] = satisfaction_df["rating_normalized"].fillna(0)
+        satisfaction_df["votes"] = satisfaction_df["votes"].fillna(0)
+        satisfaction_df["satisfaction_score"] = satisfaction_df["satisfaction_score"].fillna(0)
+
+        logger.info(
+            f"Loaded satisfaction for {len(satisfaction_df):,} items. "
+            f"Avg rating: {satisfaction_df['rating_normalized'].mean():.2f}/5"
+        )
+
+        return satisfaction_df
+
+    def analyze_menu_language_correlation(self, insights: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Analyze which words/terms in menu item names correlate with performance.
+
+        This method:
+        - Tokenizes item titles (lowercase, removes stopwords)
+        - Extracts unigrams and bigrams
+        - Calculates average metrics for items WITH vs WITHOUT each term
+        - Performs statistical significance testing (t-test)
+        - Classifies terms as power words, value words, quality words, or toxic words
+
+        Args:
+            insights (pd.DataFrame): Menu insights with performance metrics
+
+        Returns:
+            Dict[str, Any]: Language analysis results with:
+                - power_words: Terms that significantly boost revenue (>30%, p<0.05)
+                - toxic_words: Terms that significantly hurt revenue (<-20%)
+                - category_terms: Common terms by BCG category
+                - rename_suggestions: Suggested renames for low-performing items
+        """
+        import re
+        from collections import Counter, defaultdict
+
+        logger.info("Analyzing menu language correlation...")
+
+        if 'item_title' not in insights.columns or len(insights) < 10:
+            logger.warning("Insufficient data for language analysis")
+            return {}
+
+        # Stopwords to exclude
+        stopwords = {
+            'the', 'a', 'an', 'and', 'or', 'but', 'with', 'for', 'of', 'in', 'on', 'at', 'to',
+            'is', 'are', 'was', 'were', 'be', 'been', 'being'
+        }
+
+        # Tokenize all item titles
+        def tokenize(title):
+            """Extract words from title"""
+            if pd.isna(title):
+                return []
+            # Convert to lowercase, extract words
+            words = re.findall(r'\b\w+\b', str(title).lower())
+            # Filter: length >= 3, not stopword, not all digits
+            return [w for w in words if len(w) >= 3 and w not in stopwords and not w.isdigit()]
+
+        insights['tokens'] = insights['item_title'].apply(tokenize)
+
+        # Count term frequency
+        all_terms = []
+        for tokens in insights['tokens']:
+            all_terms.extend(tokens)
+        term_counts = Counter(all_terms)
+
+        # Filter: term must appear in at least 3 items
+        valid_terms = [term for term, count in term_counts.items() if count >= 3]
+
+        logger.info(f"Found {len(valid_terms)} terms appearing in 3+ items")
+
+        # Calculate correlation for each term
+        term_analysis = []
+
+        for term in valid_terms:
+            # Items WITH this term
+            with_term = insights[insights['tokens'].apply(lambda tokens: term in tokens)]
+            # Items WITHOUT this term
+            without_term = insights[~insights['tokens'].apply(lambda tokens: term in tokens)]
+
+            if len(with_term) < 2 or len(without_term) < 2:
+                continue
+
+            # Calculate average metrics
+            avg_revenue_with = with_term['total_revenue'].mean()
+            avg_revenue_without = without_term['total_revenue'].mean()
+            avg_margin_with = with_term['margin_percentage'].mean()
+            avg_margin_without = without_term['margin_percentage'].mean()
+
+            # Calculate lift
+            revenue_lift = avg_revenue_with - avg_revenue_without
+            revenue_lift_pct = (revenue_lift / avg_revenue_without * 100) if avg_revenue_without > 0 else 0
+
+            # T-test for statistical significance
+            try:
+                t_stat, p_value = stats.ttest_ind(
+                    with_term['total_revenue'],
+                    without_term['total_revenue'],
+                    equal_var=False
+                )
+            except:
+                p_value = 1.0
+
+            # Satisfaction lift if available
+            satisfaction_lift = 0.0
+            if 'rating_normalized' in insights.columns:
+                with_term_rated = with_term[with_term['rating_normalized'] > 0]
+                without_term_rated = without_term[without_term['rating_normalized'] > 0]
+                if len(with_term_rated) > 0 and len(without_term_rated) > 0:
+                    satisfaction_lift = (
+                        with_term_rated['rating_normalized'].mean() -
+                        without_term_rated['rating_normalized'].mean()
+                    )
+
+            term_analysis.append({
+                'term': term,
+                'frequency': len(with_term),
+                'avg_revenue_with': avg_revenue_with,
+                'avg_revenue_without': avg_revenue_without,
+                'revenue_lift': revenue_lift,
+                'revenue_lift_pct': revenue_lift_pct,
+                'margin_lift': avg_margin_with - avg_margin_without,
+                'satisfaction_lift': satisfaction_lift,
+                'p_value': p_value
+            })
+
+        # Sort by revenue lift
+        term_analysis_df = pd.DataFrame(term_analysis).sort_values('revenue_lift', ascending=False)
+
+        # Classify terms
+        power_words = term_analysis_df[
+            (term_analysis_df['revenue_lift_pct'] > 30) &
+            (term_analysis_df['p_value'] < 0.05)
+        ].head(10).to_dict('records')
+
+        toxic_words = term_analysis_df[
+            (term_analysis_df['revenue_lift_pct'] < -20)
+        ].tail(10).to_dict('records')
+
+        # Category-specific common terms
+        category_terms = {}
+        for category in ['star', 'plowhorse', 'puzzle', 'dog']:
+            cat_items = insights[insights['category'] == category]
+            if len(cat_items) > 0:
+                cat_tokens = []
+                for tokens in cat_items['tokens']:
+                    cat_tokens.extend(tokens)
+                cat_term_counts = Counter(cat_tokens)
+                # Top 5 most common terms in this category
+                category_terms[category] = [term for term, count in cat_term_counts.most_common(5)]
+
+        # Generate rename suggestions for low-performing items
+        rename_suggestions = []
+        if len(power_words) > 0 and len(toxic_words) > 0:
+            # Find Dog items with toxic words
+            dog_items = insights[insights['category'] == 'dog'].copy()
+            for idx, item in dog_items.head(5).iterrows():
+                current_name = item['item_title']
+                tokens = set(item['tokens'])
+
+                # Check if it has toxic words
+                has_toxic = any(tw['term'] in tokens for tw in toxic_words)
+
+                if has_toxic and len(power_words) > 0:
+                    # Suggest replacing with a power word
+                    power_term = power_words[0]['term']
+                    suggested_name = f"{power_term.capitalize()} {current_name}"
+                    rename_suggestions.append({
+                        'current_name': current_name,
+                        'suggested_name': suggested_name,
+                        'reason': f"Contains underperforming terms, add '{power_term}' to boost appeal"
+                    })
+
+        logger.info(f"Language analysis complete: {len(power_words)} power words, {len(toxic_words)} toxic words")
+
+        return {
+            'power_words': power_words,
+            'toxic_words': toxic_words,
+            'category_terms': category_terms,
+            'rename_suggestions': rename_suggestions[:5],  # Limit to 5 suggestions
+            'all_term_analysis': term_analysis_df.head(50).to_dict('records')
+        }
+
+    def analyze_purchase_patterns(
+        self,
+        order_items: pd.DataFrame,
+        timeline_data: Optional[pd.DataFrame] = None
+    ) -> Dict[str, Any]:
+        """
+        Comprehensive customer behavior pattern analysis.
+
+        Args:
+            order_items (pd.DataFrame): Order transaction data
+            timeline_data (Optional[pd.DataFrame]): Timeline data with timestamps
+
+        Returns:
+            Dict[str, Any]: Complete behavior analysis including:
+                - copurchase_pairs: Frequently co-purchased item pairs
+                - hourly_patterns: Time-of-day purchase trends
+                - day_patterns: Day-of-week trends
+                - cross_sell_opportunities: Recommended item combinations
+        """
+        logger.info("Analyzing customer purchase patterns...")
+
+        analysis = {}
+
+        # Co-purchase analysis
+        analysis['copurchase_pairs'] = self.detect_copurchase_patterns(order_items)
+
+        # Temporal patterns
+        if timeline_data is not None and len(timeline_data) > 0:
+            analysis.update(self.analyze_temporal_patterns(timeline_data))
+        else:
+            analysis['hourly_patterns'] = {}
+            analysis['day_patterns'] = {}
+
+        # Cross-sell opportunities (derived from co-purchase)
+        analysis['cross_sell_opportunities'] = self._generate_cross_sell_recommendations(
+            analysis['copurchase_pairs']
+        )
+
+        logger.info("Purchase pattern analysis complete")
+        return analysis
+
+    def detect_copurchase_patterns(self, order_items: pd.DataFrame) -> List[Dict]:
+        """
+        Market basket analysis for co-purchased items.
+
+        Uses association rule mining to find item pairs that are frequently
+        purchased together. Calculates support, confidence, and lift metrics.
+
+        Args:
+            order_items (pd.DataFrame): Order transaction data with order_id
+
+        Returns:
+            List[Dict]: Co-purchase pairs sorted by lift, with metrics:
+                - item_a, item_b: Item names
+                - support: Frequency of co-occurrence (0-1)
+                - confidence: P(item_b | item_a)
+                - lift: How much more likely they're bought together vs random
+        """
+        logger.info("Detecting co-purchase patterns...")
+
+        if 'order_id' not in order_items.columns:
+            logger.warning("No order_id column - cannot detect co-purchase patterns")
+            return []
+
+        # Group by order to get item sets
+        orders = order_items.groupby('order_id')['item_title'].apply(list).reset_index()
+
+        if len(orders) < 10:
+            logger.warning("Too few orders for co-purchase analysis")
+            return []
+
+        total_orders = len(orders)
+
+        # Generate item pairs within orders
+        from itertools import combinations
+
+        pair_counts = defaultdict(int)
+        item_counts = defaultdict(int)
+
+        for _, row in orders.iterrows():
+            items = list(set(row['item_title']))  # Unique items in order
+            if len(items) < 2:
+                continue
+
+            # Count individual items
+            for item in items:
+                item_counts[item] += 1
+
+            # Count pairs
+            for item_a, item_b in combinations(sorted(items), 2):
+                pair_counts[(item_a, item_b)] += 1
+
+        # Calculate metrics
+        copurchase_results = []
+
+        for (item_a, item_b), count in pair_counts.items():
+            # Support: P(A and B)
+            support = count / total_orders
+
+            # Confidence: P(B | A)
+            confidence = count / item_counts[item_a] if item_counts[item_a] > 0 else 0
+
+            # Lift: P(A and B) / (P(A) * P(B))
+            prob_a = item_counts[item_a] / total_orders
+            prob_b = item_counts[item_b] / total_orders
+            lift = (support / (prob_a * prob_b)) if (prob_a * prob_b) > 0 else 0
+
+            # Filter: minimum thresholds (lowered for better results with large datasets)
+            # Support: at least 0.1% of orders (was 2%)
+            # Confidence: at least 20% chance (was 30%)
+            # Lift: at least 1.3x more likely than random (was 1.5x)
+            if support >= 0.001 and confidence >= 0.20 and lift >= 1.3 and count >= 3:
+                copurchase_results.append({
+                    'item_a': item_a,
+                    'item_b': item_b,
+                    'support': support,
+                    'confidence': confidence,
+                    'lift': lift,
+                    'count': count
+                })
+
+        # Sort by lift (strongest associations first)
+        copurchase_results.sort(key=lambda x: x['lift'], reverse=True)
+
+        logger.info(f"Found {len(copurchase_results)} co-purchase patterns")
+        return copurchase_results[:50]  # Top 50
+
+    def analyze_temporal_patterns(self, timeline_data: pd.DataFrame) -> Dict:
+        """
+        Analyze time-based purchasing patterns.
+
+        Args:
+            timeline_data (pd.DataFrame): Order data with timestamp column
+
+        Returns:
+            Dict: Temporal patterns including:
+                - hourly_patterns: Items ordered by hour of day
+                - day_patterns: Items ordered by day of week
+                - peak_hours: Hours with highest order volume
+        """
+        logger.info("Analyzing temporal patterns...")
+
+        temporal_analysis = {
+            'hourly_patterns': {},
+            'day_patterns': {},
+            'peak_hours': []
+        }
+
+        # Work on a copy to avoid mutating upstream dataframes
+        timeline_data = timeline_data.copy()
+
+        # Check for timestamp column
+        timestamp_col = None
+        for col in ['created_at', 'order_time', 'timestamp', 'created', 'order_datetime']:
+            if col in timeline_data.columns:
+                timestamp_col = col
+                break
+
+        if not timestamp_col:
+            logger.warning("No timestamp column found in timeline data")
+            return temporal_analysis
+
+        # Resolve item-title column variants found in exported timeline files
+        item_col = None
+        for col in ['item_title', 'title', 'item_name', 'name']:
+            if col in timeline_data.columns:
+                item_col = col
+                break
+
+        # Convert to datetime.
+        # Numeric timestamp columns are treated as UNIX seconds; text columns use parser inference.
+        ts_numeric = pd.to_numeric(timeline_data[timestamp_col], errors='coerce')
+        numeric_coverage = ts_numeric.notna().mean()
+        if numeric_coverage >= 0.95:
+            timeline_data[timestamp_col] = pd.to_datetime(ts_numeric, unit='s', errors='coerce')
+        else:
+            timeline_data[timestamp_col] = pd.to_datetime(timeline_data[timestamp_col], errors='coerce')
+
+        # Drop rows with invalid timestamps before deriving time features
+        timeline_data = timeline_data[timeline_data[timestamp_col].notna()]
+        if len(timeline_data) == 0:
+            logger.warning("All timeline timestamps failed to parse")
+            return temporal_analysis
+
+        # Extract hour and day of week
+        timeline_data['hour'] = timeline_data[timestamp_col].dt.hour
+        timeline_data['day_of_week'] = timeline_data[timestamp_col].dt.dayofweek  # 0=Monday
+
+        # Hourly patterns
+        if item_col:
+            hourly_orders = timeline_data.groupby(['hour', item_col]).size().reset_index(name='count')
+            hourly_top = hourly_orders.sort_values('count', ascending=False).groupby('hour').head(5)
+
+            for hour in range(24):
+                hour_items = hourly_top[hourly_top['hour'] == hour]
+                if len(hour_items) > 0:
+                    hour_items = hour_items.rename(columns={item_col: 'item_title'})
+                    temporal_analysis['hourly_patterns'][hour] = hour_items[['item_title', 'count']].to_dict('records')
+
+        # Peak hours
+        hourly_volume = timeline_data.groupby('hour').size().reset_index(name='orders')
+        peak_threshold = hourly_volume['orders'].quantile(0.75)
+        peak_hours = hourly_volume[hourly_volume['orders'] >= peak_threshold]['hour'].tolist()
+        temporal_analysis['peak_hours'] = peak_hours
+
+        # Day patterns (weekday vs weekend)
+        timeline_data['is_weekend'] = timeline_data['day_of_week'].isin([5, 6])  # Sat, Sun
+
+        if item_col:
+            weekday_items = timeline_data[~timeline_data['is_weekend']][item_col].value_counts().head(10)
+            weekend_items = timeline_data[timeline_data['is_weekend']][item_col].value_counts().head(10)
+
+            temporal_analysis['day_patterns'] = {
+                'weekday_favorites': weekday_items.to_dict(),
+                'weekend_favorites': weekend_items.to_dict()
+            }
+
+        logger.info("Temporal analysis complete")
+        return temporal_analysis
+
+    def _generate_cross_sell_recommendations(self, copurchase_pairs: List[Dict]) -> List[Dict]:
+        """Generate actionable cross-sell recommendations from co-purchase patterns."""
+        recommendations = []
+
+        for pair in copurchase_pairs[:10]:  # Top 10 pairs
+            recommendations.append({
+                'anchor_item': pair['item_a'],
+                'recommended_item': pair['item_b'],
+                'expected_rate': pair['confidence'],
+                'lift': pair['lift'],
+                'rationale': f"Customers who order {pair['item_a']} also order {pair['item_b']} {pair['confidence']*100:.0f}% of the time"
+            })
+
+        return recommendations
+
+    def build_menu_insights(self, order_items: pd.DataFrame) -> pd.DataFrame:
+        """
+        Build comprehensive menu engineering insights from order data.
+        
+        This method:
+        1. Aggregates metrics by menu item (quantity, revenue, cost, margins)
+        2. Calculates profitability (contribution margin and %)
+        3. Calculates popularity score (percentage of total sales volume)
+        4. Classifies items into BCG Matrix quadrants
+        5. Generates strategic recommendations
+        
+        The BCG Matrix classification uses:
+        - Profitability: Contribution Margin (Revenue - COGS)
+        - Popularity: Sales Volume (quantity sold)
+        - Thresholds: Medians of respective metrics
+        
+        Quadrant Definitions:
+        - STAR: High profit + High popularity -> Protect and promote
+        - PLOW: High profit + Low popularity -> Increase visibility
+        - PUZZLE: Low profit + High popularity -> Optimize pricing/bundling
+        - DOG: Low profit + Low popularity -> Remove or redesign
+        
+        Args:
+            order_items (pd.DataFrame): Normalized order data
+        
+        Returns:
+            pd.DataFrame: Menu insights with columns:
+                - menu_item_id: Item identifier
+                - item_title: Item name
+                - total_quantity: Units sold
+                - total_revenue: DKK revenue
+                - total_cost: DKK COGS
+                - contribution_margin: DKK profit
+                - margin_percentage: Profit as % of revenue
+                - popularity_score: Percentage of total sales
+                - category: BCG quadrant (Star/Plow/Puzzle/Dog)
+                - suggested_action: Strategic recommendation
+                - price_hint: Pricing guidance
+        """
+        logger.info("Building menu insights from order data...")
+        
+        # Aggregate metrics by menu item
+        grouped = (
+            order_items.groupby(["menu_item_id", "item_title"], dropna=False)
+            .agg(
+                total_quantity=("quantity", "sum"),
+                total_revenue=("item_revenue", "sum"),
+                total_cost=("item_cost", "sum"),
+                avg_price=("unit_price", "mean"),
+                avg_cost=("unit_cost", "mean"),
+                std_price=("unit_price", "std"),
+                menu_status=("menu_status", "last"),
+                order_count=("quantity", "count"),
+            )
+            .reset_index()
+        )
+
+        # Calculate profitability metrics
+        grouped["contribution_margin"] = grouped["total_revenue"] - grouped["total_cost"]
+        grouped["margin_percentage"] = np.where(
+            grouped["total_revenue"] > 0,
+            (grouped["contribution_margin"] / grouped["total_revenue"]) * 100,
+            0,
+        )
+
+        # Calculate popularity as percentage of total sales
+        total_qty = grouped["total_quantity"].sum()
+        grouped["popularity_score"] = np.where(
+            total_qty > 0,
+            (grouped["total_quantity"] / total_qty) * 100,
+            0,
+        )
+
+        # Set thresholds for quadrant classification
+        self.profit_threshold = grouped["contribution_margin"].median()
+        self.popularity_threshold = grouped["total_quantity"].median()
+
+        logger.info(f"Profit threshold: {self.currency} {self.profit_threshold:,.0f}")
+        logger.info(f"Popularity threshold: {self.popularity_threshold:,.0f} units")
+
+        # Classify items into BCG Matrix quadrants
+        grouped["category"] = grouped.apply(
+            lambda row: self._classify_item(row, self.popularity_threshold, self.profit_threshold),
+            axis=1,
+        )
+
+        # Merge customer satisfaction metrics before generating recommendations
+        if self.menu_items_df is not None:
+            satisfaction_df = self.load_satisfaction_metrics(self.menu_items_df)
+            if satisfaction_df is not None:
+                grouped = grouped.merge(
+                    satisfaction_df,
+                    on="menu_item_id",
+                    how="left"
+                )
+                # Fill NaN for items without satisfaction data
+                grouped["rating_normalized"] = grouped["rating_normalized"].fillna(0)
+                grouped["votes"] = grouped["votes"].fillna(0)
+                grouped["satisfaction_score"] = grouped["satisfaction_score"].fillna(0)
+
+                logger.info(f"Merged satisfaction metrics for insights")
+            else:
+                # No satisfaction data - add dummy columns
+                grouped["rating_normalized"] = 0.0
+                grouped["votes"] = 0
+                grouped["satisfaction_score"] = 0.0
+        else:
+            # No menu items available - add dummy columns
+            grouped["rating_normalized"] = 0.0
+            grouped["votes"] = 0
+            grouped["satisfaction_score"] = 0.0
+
+        # Generate strategic recommendations (with satisfaction context)
+        grouped["suggested_action"] = grouped.apply(
+            lambda row: self._recommend_action(
+                row["category"],
+                row["margin_percentage"],
+                row.get("rating_normalized", 0.0),
+                row.get("votes", 0.0),
+            ),
+            axis=1,
+        )
+
+        # Generate pricing guidance
+        grouped["price_hint"] = grouped.apply(
+            lambda row: self._price_hint(row["category"], row["avg_price"], row["margin_percentage"]),
+            axis=1,
+        )
+
+        # Sort by category and revenue for easy analysis
+        insights = grouped.sort_values(
+            ["category", "total_revenue"],
+            ascending=[True, False]
+        )
+
+        # Log summary statistics
+        logger.info("="*60)
+        logger.info("MENU INSIGHTS SUMMARY")
+        logger.info("="*60)
+        for category in ["star", "plowhorse", "puzzle", "dog"]:
+            count = len(insights[insights["category"] == category])
+            if count > 0:
+                logger.info(f"{category.upper()}: {count} items")
+        logger.info("="*60)
+
+        self.insights_df = insights
+        return insights
+

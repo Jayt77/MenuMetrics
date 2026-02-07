@@ -163,3 +163,110 @@ class UniversalDataAdapter:
 
         return profile
 
+    def _profile_column(self, series: pd.Series) -> ColumnProfile:
+        """Profile a single column."""
+        null_count = series.isnull().sum()
+        null_percentage = (null_count / len(series)) * 100
+        unique_count = series.nunique()
+        cardinality = unique_count / len(series) if len(series) > 0 else 0
+
+        # Type detection
+        is_numeric = pd.api.types.is_numeric_dtype(series)
+        is_datetime = pd.api.types.is_datetime64_any_dtype(series)
+        is_categorical = cardinality < 0.5 and unique_count < 100
+
+        # Suggested type
+        if is_datetime:
+            suggested_type = 'datetime'
+        elif is_numeric:
+            if cardinality > 0.9:
+                suggested_type = 'numeric_id'
+            elif unique_count < 20:
+                suggested_type = 'categorical'
+            else:
+                suggested_type = 'numeric'
+        elif is_categorical:
+            suggested_type = 'categorical'
+        else:
+            suggested_type = 'text'
+
+        # Sample values (non-null)
+        sample_values = series.dropna().head(5).tolist()
+
+        return ColumnProfile(
+            name=series.name,
+            dtype=str(series.dtype),
+            cardinality=cardinality,
+            null_count=int(null_count),
+            null_percentage=null_percentage,
+            unique_count=unique_count,
+            sample_values=sample_values,
+            is_numeric=is_numeric,
+            is_datetime=is_datetime,
+            is_categorical=is_categorical,
+            suggested_type=suggested_type
+        )
+
+    def _detect_dataset_type(self, df: pd.DataFrame, profiles: Dict[str, ColumnProfile]) -> str:
+        """
+        Detect whether data is transaction, master, event, or financial.
+
+        Heuristics:
+        - Transaction: High cardinality, timestamps, numeric amounts, IDs
+        - Master: Low-medium cardinality, descriptive fields
+        - Event: Timestamps, user actions, event names
+        - Financial: Payment fields, amounts, currencies
+        """
+        has_timestamps = any(p.is_datetime for p in profiles.values())
+        has_amounts = any('price' in p.name.lower() or 'amount' in p.name.lower()
+                         for p in profiles.values())
+        has_quantity = any('qty' in p.name.lower() or 'quantity' in p.name.lower()
+                          for p in profiles.values())
+        has_events = any('event' in p.name.lower() for p in profiles.values())
+        has_payment = any('payment' in p.name.lower() or 'card' in p.name.lower()
+                         for p in profiles.values())
+
+        avg_cardinality = np.mean([p.cardinality for p in profiles.values()])
+
+        if has_payment:
+            return 'financial'
+        elif has_events and has_timestamps:
+            return 'event'
+        elif has_timestamps and has_amounts and has_quantity:
+            return 'transaction'
+        elif avg_cardinality < 0.3:
+            return 'master'
+        else:
+            return 'transaction'  # Default assumption
+
+    def _calculate_quality_score(self, df: pd.DataFrame, profiles: Dict[str, ColumnProfile]) -> float:
+        """
+        Calculate overall data quality score (0-100).
+
+        Factors:
+        - Completeness (no nulls)
+        - Consistency (appropriate types)
+        - Validity (reasonable values)
+        """
+        # Completeness score
+        completeness = (1 - df.isnull().sum().sum() / (len(df) * len(df.columns))) * 100
+
+        # Type consistency score
+        type_scores = []
+        for profile in profiles.values():
+            if profile.suggested_type == 'numeric' and profile.is_numeric:
+                type_scores.append(100)
+            elif profile.suggested_type == 'datetime' and profile.is_datetime:
+                type_scores.append(100)
+            elif profile.suggested_type in ['categorical', 'text']:
+                type_scores.append(80)
+            else:
+                type_scores.append(50)
+
+        type_consistency = np.mean(type_scores) if type_scores else 50
+
+        # Combined score
+        quality_score = (completeness * 0.6 + type_consistency * 0.4)
+
+        return min(100, max(0, quality_score))
+

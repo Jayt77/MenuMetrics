@@ -598,3 +598,503 @@ def create_pricing_chart(pricing_recs):
         return None
     
     recs_df = pd.DataFrame([
+        {
+            "Title": rec.title[:20],
+            "Current": rec.current_price,
+            "Recommended": rec.optimal_price,
+            "Impact": rec.profit_impact,
+        }
+        for rec in pricing_recs
+        if abs(rec.price_change_percent) > 2.0  # Only show significant changes
+    ])
+    
+    if recs_df.empty:
+        return None
+    
+    fig = go.Figure()
+    
+    fig.add_trace(go.Bar(
+        x=recs_df["Title"],
+        y=recs_df["Current"],
+        name="Current Price",
+        marker_color="#3498DB",
+    ))
+    
+    fig.add_trace(go.Bar(
+        x=recs_df["Title"],
+        y=recs_df["Recommended"],
+        name="Recommended Price",
+        marker_color="#2ECC71",
+    ))
+    
+    fig.update_layout(
+        title="<b>Price Optimization Recommendations</b>",
+        xaxis_title="Item",
+        yaxis_title="Price (DKK)",
+        barmode="group",
+        height=400,
+        xaxis_tickangle=-45,
+    )
+    
+    return fig
+
+
+# ========== Dashboard Pages ==========
+
+def page_overview():
+    """Dashboard overview tab."""
+    st.header("[Data] Menu Performance Overview")
+    
+    if st.session_state.insights is None:
+        st.warning("Data is loading, please wait...")
+        return
+    
+    insights = st.session_state.insights
+    summary = st.session_state.summary
+    
+    # Key metrics
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    with col1:
+        st.metric(
+            "Total Items",
+            f"{summary['total_items']:.0f}",
+            help="Number of menu items"
+        )
+
+    with col2:
+        st.metric(
+            "Total Revenue",
+            f"DKK {summary['total_revenue']:,.0f}",
+            help="Total historical revenue"
+        )
+
+    with col3:
+        st.metric(
+            "Total Margin",
+            f"DKK {summary['total_margin']:,.0f}",
+            help="Total contribution margin"
+        )
+
+    with col4:
+        st.metric(
+            "Avg Margin %",
+            f"{summary['average_margin_pct']:.1f}%",
+            help="Average margin percentage"
+        )
+
+    with col5:
+        # Calculate average customer rating if available
+        if "rating_normalized" in insights.columns:
+            avg_rating = insights[insights["rating_normalized"] > 0]["rating_normalized"].mean()
+            total_votes = insights["votes"].sum()
+            st.metric(
+                "Avg Customer Rating",
+                f"{avg_rating:.2f}/5",
+                help=f"Average customer rating ({total_votes:,.0f} total votes)"
+            )
+        else:
+            st.metric(
+                "Avg Customer Rating",
+                "N/A",
+                help="Customer ratings not available"
+            )
+
+    # Display profitability assumption
+    st.caption(f"Profitability Assumption: {st.session_state.profitability_margin * 100:.0f}% (adjustable in sidebar)")
+
+    st.divider()
+
+    # BCG Matrix with view toggle
+    view_mode = st.radio(
+        "Matrix View",
+        ["Detailed Scatter Plot", "Simplified Quadrant Summary"],
+        horizontal=True,
+        help="Choose visualization style. Simplified view is faster for large datasets."
+    )
+
+    if view_mode == "Detailed Scatter Plot":
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            # Allow user to adjust max points
+            if len(insights) > 500:
+                max_points = st.slider(
+                    "Max points to display",
+                    min_value=100,
+                    max_value=min(2000, len(insights)),
+                    value=500,
+                    step=100,
+                    help="Reduce for better performance with large datasets"
+                )
+            else:
+                max_points = len(insights)
+
+            st.plotly_chart(create_bcg_matrix_chart(insights, max_points), use_container_width=True)
+
+        with col2:
+            st.plotly_chart(create_category_distribution_chart(insights), use_container_width=True)
+
+    else:
+        # Simplified Quadrant Summary View
+        st.subheader("Quadrant Summary")
+
+        # Create 2x2 grid for quadrants
+        row1_col1, row1_col2 = st.columns(2)
+        row2_col1, row2_col2 = st.columns(2)
+
+        quadrants = [
+            ("star", " STARS", "High Profit + High Popularity", row1_col1, "#FFD700"),
+            ("plowhorse", " PLOWHORSES", "High Profit + Low Popularity", row1_col2, "#45B7D1"),
+            ("puzzle", " PUZZLES", "Low Profit + High Popularity", row2_col1, "#4ECDC4"),
+            ("dog", " DOGS", "Low Profit + Low Popularity", row2_col2, "#FF6B6B"),
+        ]
+
+        for category, title, description, col, color in quadrants:
+            with col:
+                cat_data = insights[insights["category"] == category]
+
+                if len(cat_data) > 0:
+                    total_revenue = cat_data["total_revenue"].sum()
+                    total_margin = cat_data["contribution_margin"].sum()
+                    avg_margin_pct = cat_data["margin_percentage"].mean()
+                    item_count = len(cat_data)
+
+                    st.markdown(f"""
+                    <div style="background-color: {color}22; border-left: 4px solid {color}; padding: 15px; border-radius: 5px; height: 220px;">
+                        <h3 style="color: {color}; margin-top: 0;">{title}</h3>
+                        <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">{description}</p>
+                        <div style="margin-top: 10px;">
+                            <strong>{item_count:,}</strong> items<br>
+                            <strong>DKK {total_revenue:,.0f}</strong> revenue<br>
+                            <strong>DKK {total_margin:,.0f}</strong> margin<br>
+                            <strong>{avg_margin_pct:.1f}%</strong> avg margin
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                    <div style="background-color: {color}22; border-left: 4px solid {color}; padding: 15px; border-radius: 5px; height: 220px;">
+                        <h3 style="color: {color}; margin-top: 0;">{title}</h3>
+                        <p style="color: #666; font-size: 0.9em;">No items in this category</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+    
+    st.divider()
+    
+    # Revenue analysis
+    st.plotly_chart(create_revenue_by_category_chart(insights), use_container_width=True)
+    
+    # Top items table
+    st.subheader(" Top 10 Items by Revenue")
+    top_items = create_top_items_table(insights, 10)
+    st.dataframe(
+        top_items.style.format({
+            "Units Sold": "{:,.0f}",
+            "Revenue (DKK)": "{:,.0f}",
+            "Margin %": "{:.1f}%"
+        }),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+def page_category_analysis():
+    """Deep dive into each BCG category."""
+    st.header("[Target] Category Analysis")
+    
+    if st.session_state.insights is None:
+        st.warning("Data is loading, please wait...")
+        return
+    
+    insights = st.session_state.insights
+    
+    # Select category
+    selected_category = st.radio(
+        "Select Category",
+        ["star", "plowhorse", "puzzle", "dog"],
+        format_func=lambda x: {
+            "star": "Stars (High profit + High popularity)",
+            "plowhorse": "Plowhorses (High profit + Low popularity)",
+            "puzzle": "Puzzles (Low profit + High popularity)",
+            "dog": " Dogs (Low profit + Low popularity)",
+        }.get(x, x),
+        horizontal=True,
+    )
+    
+    cat_items = insights[insights["category"] == selected_category]
+    
+    if len(cat_items) == 0:
+        st.info(f"No items in {selected_category} category")
+        return
+    
+    # Category summary
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Items in Category", len(cat_items))
+    with col2:
+        st.metric("Total Revenue", f"DKK {cat_items['total_revenue'].sum():,.0f}")
+    with col3:
+        st.metric("Total Margin", f"DKK {cat_items['contribution_margin'].sum():,.0f}")
+    with col4:
+        st.metric("Avg Margin %", f"{cat_items['margin_percentage'].mean():.1f}%")
+    
+    st.divider()
+    
+    # Category description and recommendations
+    category_info = {
+        "star": {
+            "description": "These are your best performers - high profits and high popularity.",
+            "action": "Protect availability, promote aggressively, consider premium variants.",
+            "color": "",
+        },
+        "plowhorse": {
+            "description": "High profit items with low sales volume.",
+            "action": "Increase visibility through menu placement, description enhancement, and targeted promotions.",
+            "color": "",
+        },
+        "puzzle": {
+            "description": "Popular items with low profit margins.",
+            "action": "Optimize pricing, test bundles with Stars, enhance descriptions.",
+            "color": "",
+        },
+        "dog": {
+            "description": "Low profits and low popularity.",
+            "action": "Remove or redesign. If margins < 5%, removal is recommended.",
+            "color": "",
+        },
+    }
+    
+    info = category_info.get(selected_category, {})
+    st.info(f"**{info['description']}**\n\n**Recommended Action:** {info['action']}")
+    
+    st.divider()
+    
+    # Items in category
+    st.subheader(f"Items in {selected_category.upper()} Category")
+
+    # Build display columns (include customer rating if available)
+    display_cols = ["item_title", "total_quantity", "total_revenue", "contribution_margin", "margin_percentage"]
+
+    # Add customer rating columns if available
+    if "rating_normalized" in cat_items.columns and "votes" in cat_items.columns:
+        display_cols.extend(["rating_normalized", "votes"])
+
+    display_cols.append("suggested_action")
+
+    category_table = cat_items[display_cols].copy()
+
+    # Rename columns
+    rename_dict = {
+        "item_title": "Item",
+        "total_quantity": "Units Sold",
+        "total_revenue": "Revenue (DKK)",
+        "contribution_margin": "Margin (DKK)",
+        "margin_percentage": "Margin %",
+        "suggested_action": "Recommendation",
+    }
+
+    if "rating_normalized" in category_table.columns:
+        rename_dict["rating_normalized"] = "Customer Rating"
+        rename_dict["votes"] = "Votes"
+
+    category_table = category_table.rename(columns=rename_dict)
+
+    # Show More functionality
+    pagination_key = f"category_{selected_category}"
+    show_count = get_show_more_count(pagination_key)
+    total_items = len(category_table)
+
+    # Display limited items with formatting
+    format_dict = {
+        "Units Sold": "{:,.0f}",
+        "Revenue (DKK)": "{:,.0f}",
+        "Margin (DKK)": "{:,.0f}",
+        "Margin %": "{:.1f}%"
+    }
+
+    # Add customer rating formatting if present
+    if "Customer Rating" in category_table.columns:
+        format_dict["Customer Rating"] = "{:.2f}/5"
+        format_dict["Votes"] = "{:,.0f}"
+
+    st.dataframe(
+        category_table.head(show_count).style.format(format_dict),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    # Show More button
+    show_more_button(pagination_key, total_items)
+
+
+def page_pricing_analysis():
+    """Pricing optimization tab."""
+    st.header(" Pricing Optimization")
+    
+    if st.session_state.insights is None:
+        st.warning("Data is loading, please wait...")
+        return
+    
+    # Generate pricing recommendations if not already done
+    if st.session_state.pricing_recs is None:
+        with st.spinner("Analyzing price elasticity..."):
+            st.session_state.pricing_recs = st.session_state.service.analyze_pricing_optimization(
+                st.session_state.order_items
+            )
+    
+    pricing_recs = st.session_state.pricing_recs
+    
+    if not pricing_recs:
+        st.info("Insufficient price variation in data for elasticity analysis")
+        return
+    
+    st.subheader(f"Found {len(pricing_recs)} items with pricing opportunities")
+    
+    # Filter by confidence level
+    confidence_threshold = st.slider(
+        "Minimum Confidence Level",
+        0.0, 1.0, 0.5,
+        help="Only show recommendations with this confidence or higher"
+    )
+    
+    filtered_recs = [r for r in pricing_recs if r.confidence_level >= confidence_threshold]
+    
+    if not filtered_recs:
+        st.info(f"No recommendations found with >= {confidence_threshold*100:.0f}% confidence")
+        return
+    
+    # Chart
+    chart = create_pricing_chart(filtered_recs)
+    if chart:
+        st.plotly_chart(chart, use_container_width=True)
+    
+    st.divider()
+    
+    # Recommendations table
+    st.subheader("Detailed Recommendations")
+
+    recs_data = []
+    for rec in filtered_recs:
+        if abs(rec.price_change_percent) > 1.0:  # Only significant changes
+            recs_data.append({
+                "Item": rec.title[:25],
+                "Current Price": f"DKK {rec.current_price:.2f}",
+                "Recommended": f"DKK {rec.optimal_price:.2f}",
+                "Change": f"{rec.price_change_percent:+.1f}%",
+                "Profit Impact": f"DKK {rec.profit_impact:+,.0f}",
+                "Confidence": f"{rec.confidence_level*100:.0f}%",
+                "Elasticity": f"{rec.price_elasticity:.2f}",
+            })
+
+    if recs_data:
+        recs_df = pd.DataFrame(recs_data)
+        st.dataframe(recs_df, use_container_width=True, hide_index=True)
+    
+    st.info("""
+    **How to interpret elasticity:**
+    - **Elasticity = -0.8**: 1% price increase -> 0.8% quantity decrease (inelastic, good for raising prices)
+    - **Elasticity = -1.5**: 1% price increase -> 1.5% quantity decrease (elastic, price sensitive)
+    - **Confidence**: Higher = more reliable recommendation (0-100%)
+    """)
+
+
+def page_optimization_plan():
+    """Menu optimization plan tab."""
+    st.header(" Menu Optimization Plan")
+
+    if st.session_state.insights is None:
+        st.warning("Data is loading, please wait...")
+        return
+
+    # Generate plan if not already done
+    if st.session_state.optimization_plan is None:
+        with st.spinner("Generating optimization plan..."):
+            # Get pricing recs if not done
+            if st.session_state.pricing_recs is None:
+                st.session_state.pricing_recs = st.session_state.service.analyze_pricing_optimization(
+                    st.session_state.order_items
+                )
+
+            st.session_state.optimization_plan = st.session_state.service.generate_optimization_plan(
+                st.session_state.insights,
+                st.session_state.pricing_recs,
+            )
+
+    plan = st.session_state.optimization_plan
+
+    # Expected impact
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric(
+            "Expected Revenue Uplift",
+            f"DKK {plan.expected_revenue_uplift:,.0f}",
+            help="Potential additional revenue from optimization"
+        )
+    with col2:
+        st.metric(
+            "Expected Margin Improvement",
+            f"{plan.expected_margin_uplift:.1f}%",
+            help="Potential margin improvement percentage"
+        )
+
+    st.divider()
+
+    # Implementation priority
+    st.subheader(" Implementation Priority")
+    for i, action in enumerate(plan.implementation_priority, 1):
+        st.write(f"{i}. {action}")
+
+    st.divider()
+
+    # Items to promote
+    if plan.items_to_promote:
+        st.subheader("Star Items to Promote (Stars)")
+        promote_df = pd.DataFrame(plan.items_to_promote)[["title", "revenue", "margin"]]
+        promote_df = promote_df.rename(columns={"title": "Item", "revenue": "Revenue (DKK)", "margin": "Margin (DKK)"})
+        st.dataframe(
+            promote_df.style.format({"Revenue (DKK)": "{:,.0f}", "Margin (DKK)": "{:,.0f}"}),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    # Items to optimize
+    if plan.items_to_optimize:
+        st.subheader("Plowhorse Items to Reposition (Plows)")
+        st.write("High-margin items that need better visibility:")
+        for item in plan.items_to_optimize:
+            st.write(f"- **{item['title']}** ({item['margin_pct']:.1f}% margin): {item['action']}")
+
+    # Items to remove
+    if plan.items_to_remove:
+        st.subheader(" Items to Remove (Dogs)")
+        remove_df = pd.DataFrame(plan.items_to_remove)[["title", "revenue", "margin_pct"]]
+        remove_df = remove_df.rename(columns={"title": "Item", "revenue": "Revenue (DKK)", "margin_pct": "Margin %"})
+        st.dataframe(
+            remove_df.style.format({"Revenue (DKK)": "{:,.0f}", "Margin %": "{:.1f}%"}),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    # Items to reprice
+    if plan.items_to_reprice:
+        st.subheader(" Pricing Recommendations")
+        reprice_df = pd.DataFrame(plan.items_to_reprice)[
+            ["title", "current_price", "recommended_price", "price_change_pct", "profit_impact"]
+        ]
+        reprice_df = reprice_df.rename(columns={
+            "title": "Item",
+            "current_price": "Current (DKK)",
+            "recommended_price": "Recommended (DKK)",
+            "price_change_pct": "Change %",
+            "profit_impact": "Profit Impact (DKK)",
+        })
+        st.dataframe(
+            reprice_df.style.format({
+                "Current (DKK)": "{:.2f}",
+                "Recommended (DKK)": "{:.2f}",
+                "Change %": "{:+.1f}%",
+                "Profit Impact (DKK)": "{:+,.0f}",
+            }),
+            use_container_width=True,
+            hide_index=True,

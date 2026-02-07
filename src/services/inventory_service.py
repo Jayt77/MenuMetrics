@@ -39,3 +39,34 @@ class InventoryService:
             sales_data (pd.DataFrame): Historical sales dataset.
         """
         self.inventory_data = inventory_data
+        self.sales_data = sales_data
+    
+    def predict_demand(self, item_id: str, period: str = 'daily') -> float:
+        """
+        Predicts demand for a specific item based on historical data.
+        
+        This is a simple moving average implementation. Students should implement
+        more sophisticated forecasting methods (ARIMA, Prophet, ML models).
+        
+        Args:
+            item_id (str): The unique identifier of the item.
+            period (str): Time period for prediction ('daily', 'weekly', 'monthly').
+        
+        Returns:
+            float: Predicted demand quantity.
+        
+        Raises:
+            ValueError: If item_id not found in sales data.
+        """
+        # Filter sales data for the specific item
+        item_sales = self.sales_data[self.sales_data['item_id'] == item_id]
+        
+        if item_sales.empty:
+            raise ValueError(f"No sales data found for item: {item_id}")
+        
+        # Simple moving average (last 7 days for daily, etc.)
+        window = 7 if period == 'daily' else 4 if period == 'weekly' else 3
+        avg_demand = item_sales['quantity'].tail(window).mean()
+        
+        return round(avg_demand, 2)
+    

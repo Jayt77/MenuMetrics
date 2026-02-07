@@ -45,3 +45,13 @@ class User:
         self.email = email
         self.role = role
     
+    def validate_email(self) -> bool:
+        """
+        Validates the email format.
+        
+        Returns:
+            bool: True if email is valid, False otherwise.
+        """
+        # Simple validation - students should implement proper validation
+        return '@' in self.email and '.' in self.email.split('@')[1]
+    

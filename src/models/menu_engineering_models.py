@@ -85,3 +85,50 @@ class MenuItemMetrics:
     price_std: float = 0.0
     suggested_action: Optional[str] = None
 
+
+@dataclass
+class MenuItemInsight:
+    """
+    Business intelligence and strategic recommendations for a menu item.
+    
+    This model extends MenuItemMetrics with contextual analysis and
+    actionable recommendations based on profitability and popularity.
+    Used for stakeholder communication and decision support.
+
+    Attributes:
+        menu_item_id (str): Unique item identifier
+        title (str): Item name
+        quadrant (MenuQuadrant): Strategic classification
+        metrics (MenuItemMetrics): Core metrics
+        profit_rank (int): Ranking by contribution margin (1 = highest)
+        popularity_rank (int): Ranking by sales volume (1 = highest)
+        trend (str): Direction of metric change ("up", "down", "stable")
+        recommendation (str): Strategic recommendation text
+        revenue_opportunity (float): Potential revenue uplift in DKK
+        action_priority (str): Priority level ("high", "medium", "low")
+        
+    Example:
+        >>> insight = MenuItemInsight(
+        ...     menu_item_id="101",
+        ...     title="Caesar Salad",
+        ...     quadrant=MenuQuadrant.STAR,
+        ...     metrics=menu_metrics,
+        ...     profit_rank=3,
+        ...     popularity_rank=2,
+        ...     trend="up",
+        ...     recommendation="Maintain positioning. Consider premium variant.",
+        ...     revenue_opportunity=5000,
+        ...     action_priority="medium"
+        ... )
+    """
+    menu_item_id: str
+    title: str
+    quadrant: MenuQuadrant
+    metrics: MenuItemMetrics
+    profit_rank: int
+    popularity_rank: int
+    trend: str = "stable"
+    recommendation: str = ""
+    revenue_opportunity: float = 0.0
+    action_priority: str = "medium"
+

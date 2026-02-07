@@ -120,3 +120,89 @@ def show_landing_page() -> bool:
                 time.sleep(0.5)  # Brief pause to show success message
                 st.rerun()
 
+    st.markdown("---")
+
+    # What We Analyze Section
+    st.markdown("""
+    <div style='padding: 40px 20px;'>
+        <h2 style='text-align: center; font-size: 2.2em; color: #1f2937; margin-bottom: 40px;'>
+            What You'll Get
+        </h2>
+    </div>
+    """, unsafe_allow_html=True)
+
+    feature_col1, feature_col2 = st.columns(2)
+
+    with feature_col1:
+        st.markdown("""
+        **Menu Engineering Analysis**
+        - BCG Matrix classification (Stars, Plowhorses, Puzzles, Dogs)
+        - Profitability and popularity metrics
+        - Strategic recommendations per item
+
+        **Pricing Optimization**
+        - Price elasticity analysis
+        - Optimal pricing suggestions
+        - Revenue impact projections
+        """)
+
+    with feature_col2:
+        st.markdown("""
+        **Performance Insights**
+        - Item-level revenue and profit analysis
+        - Category performance comparison
+        - Menu health scoring
+
+        **Actionable Reports**
+        - Downloadable optimization plans
+        - Visual menu designs (3 professional styles)
+        - Export-ready formats (HTML, CSV, PDF)
+        """)
+
+    st.markdown("---")
+
+    # Data Requirements
+    with st.expander("Data Requirements & Column Mapping"):
+        st.markdown("""
+        ### Required Data Fields
+
+        **For Transaction/Order Data:**
+        - `Item ID` or `Product ID` (any variation)
+        - `Quantity` or `Units Sold`
+
+        **Optional Fields (Recommended):**
+        - `Price` or `Unit Price`
+        - `Cost` or `COGS` (if not provided, estimated at 30% of price)
+        - `Date` or `Timestamp`
+        - `Customer ID` (for segmentation analysis)
+
+        ### How It Works
+
+        1. **Upload** your CSV file(s)
+        2. **Auto-Detection** - System analyzes your column names
+        3. **Mapping** - Columns are intelligently mapped to standard schema
+        4. **Validation** - Data quality is checked
+        5. **Processing** - Analysis runs automatically
+        6. **Results** - View insights in the dashboard
+
+        ### Supported Variations
+
+        Our system recognizes many column name variations:
+        - Item names: `item_name`, `product_name`, `dish_name`, `title`
+        - Quantities: `qty`, `quantity`, `units`, `sold`
+        - Prices: `price`, `unit_price`, `selling_price`
+        - Costs: `cost`, `cogs`, `food_cost`, `ingredient_cost`
+
+        **Don't see your column names? No problem!** The system uses fuzzy matching to find the best fits.
+        """)
+
+    # Footer
+    st.markdown("""
+    <div style='text-align: center; padding: 40px 20px; color: #9ca3af;'>
+        <p>Powered by MenuMetrics Intelligence Platform</p>
+        <p style='font-size: 0.9em;'>Professional menu optimization for restaurants and food service businesses</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    return False
+
