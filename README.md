@@ -109,6 +109,14 @@ python src/main.py --cli --output menu_insights.csv \
   - Business model validation and feature prioritization
   - Data collection and domain expertise on restaurant operations
 
+  ##Screenshots and Overview
+
+  ![WhatsApp Image 2026-02-07 at 11 51 18 PM](https://github.com/user-attachments/assets/5a3ad6db-981c-4675-b804-416aee5706eb)
+![WhatsApp Image 2026-02-07 at 11 51 19 PM](https://github.com/user-attachments/assets/cc8a39c9-6add-471a-95bf-da5ba1efb5e5)
+![WhatsApp Image 2026-02-07 at 11 51 20 PM](https://github.com/user-attachments/assets/24309b59-5b18-4420-8856-c2ac7d12396a)
+![WhatsApp Image 2026-02-07 at 11 51 19 PM (1)](https://github.com/user-attachments/assets/b82af1f4-cb27-48cb-8ed0-435e057a61aa)
+
+
 ## How to contribute
 1) Branch from `main` (e.g., `feat/pricing-elasticity`).
 2) Commit with clear messages (`feat:`, `fix:`, `docs:`, `test:` prefixes encouraged).
