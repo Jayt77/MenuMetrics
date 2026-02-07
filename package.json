@@ -1,0 +1,27 @@
+{
+  "name": "dih-x-auc-hackathon",
+  "version": "1.0.0",
+  "description": "Deloitte Innovation Hub x AUC Hackathon Project",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "start": "echo \"Use: streamlit run src/streamlit_dashboard.py\"",
+    "test": "echo \"No Node tests; use pytest for Python suite\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ynakhla/DIH-X-AUC-Hackathon.git"
+  },
+  "keywords": [
+    "hackathon",
+    "deloitte",
+    "auc"
+  ],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ynakhla/DIH-X-AUC-Hackathon/issues"
+  },
+  "homepage": "https://github.com/ynakhla/DIH-X-AUC-Hackathon#readme",
+  "dependencies": {}
+}
