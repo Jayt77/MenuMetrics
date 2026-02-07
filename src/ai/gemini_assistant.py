@@ -193,7 +193,92 @@ When answering questions:
             else:
                 return "No menu data available. Please load data first."
 
-            # Build comprehensive statistical context
+            # If the question is about time-based/lunch/breakfast/dinner hour analysis, require timeline data and real data for those hours
+            # Robustly handle any meal period or hour-based query
+            import re
+            q_lower = question.lower()
+            time_keywords = [
+                "lunch", "dinner", "breakfast", "hour", "time-based", "temporal", "top-selling", "most ordered", "sold most", "popular items", "busiest hour", "orders at", "top items at", "most sold at"
+            ]
+            # Also match explicit hour mentions (e.g., 12:00, 18:00, or just 23)
+            hour_matches = re.findall(r"\b([01]?\d|2[0-3])(?::?00)?\b", q_lower)
+            if any(kw in q_lower for kw in time_keywords) or hour_matches:
+                if self.timeline_df is None or self.timeline_df.empty:
+                    return "I don't have that specific data. The order_timeline_data.csv file is missing or empty."
+                # Try to find a column that represents hour (commonly 'hour', 'order_hour', or extract from 'timestamp')
+                hour_col = None
+                for col in self.timeline_df.columns:
+                    if col.lower() in ["hour", "order_hour"]:
+                        hour_col = col
+                        break
+                if hour_col is None and "timestamp" in self.timeline_df.columns:
+                    # Try to extract hour from timestamp
+                    try:
+                        self.timeline_df["_tmp_hour"] = pd.to_datetime(self.timeline_df["timestamp"]).dt.hour
+                        hour_col = "_tmp_hour"
+                    except Exception:
+                        pass
+                if hour_col is None:
+                    return "I don't have that specific data for time-based analysis. No hour or timestamp column found in order_timeline_data.csv."
+
+                # Dynamically detect meal periods from data distribution
+                hour_counts = self.timeline_df[hour_col].value_counts().sort_index()
+                if len(hour_counts) < 6:
+                    return "Not enough hourly data to determine meal periods."
+                lunch_peak = hour_counts.idxmax()
+                lunch_hours = [h for h in range(lunch_peak-1, lunch_peak+2) if h in hour_counts.index]
+                if set([11,12,13]).issubset(hour_counts.index):
+                    lunch_hours = [11,12,13]
+                breakfast_hours = [h for h in hour_counts.index if h <= 10][:3]
+                dinner_hours = [h for h in hour_counts.index if h >= 17][-3:]
+
+                # Determine which meal period or hour is being asked about
+                meal_hours = None
+                meal_name = None
+                if "lunch" in q_lower:
+                    meal_hours = lunch_hours
+                    meal_name = "lunch"
+                elif "breakfast" in q_lower:
+                    meal_hours = breakfast_hours
+                    meal_name = "breakfast"
+                elif "dinner" in q_lower:
+                    meal_hours = dinner_hours
+                    meal_name = "dinner"
+                elif hour_matches:
+                    # If user asks for a specific hour (e.g., 18:00)
+                    meal_hours = [int(h) for h in hour_matches if int(h) in hour_counts.index]
+                    meal_name = f"hour(s) {', '.join(str(h) for h in meal_hours)}"
+                else:
+                    meal_hours = lunch_hours
+                    meal_name = "lunch"
+
+                if not meal_hours:
+                    return "No valid hours found in the data for your query."
+                meal_data = self.timeline_df[self.timeline_df[hour_col].isin(meal_hours)]
+                # Always return the real top items for the meal period or hour, even if numbers are small
+                if meal_data.empty:
+                    return f"No orders found for {meal_name} ({meal_hours})."
+
+                # Smart aggregation: find top items sold during those hours
+                item_col = None
+                for col in meal_data.columns:
+                    if col.lower() in ["item_name", "menu_item_title", "product_name", "dish_name", "title", "name", "item"]:
+                        item_col = col
+                        break
+                if item_col is None:
+                    return f"I don't have item name data in order_timeline_data.csv."
+                # Count orders per item
+                item_counts = meal_data[item_col].value_counts().head(10)
+                # Build a real answer from the data, even if numbers are small
+                answer = f"Top items sold during {meal_name} ({', '.join(str(h) for h in meal_hours)}):\n"
+                if item_counts.empty:
+                    answer += "No items found for these hours."
+                else:
+                    for item, count in item_counts.items():
+                        answer += f"- {item}: {count} orders\n"
+                return answer
+
+            # Build comprehensive statistical context (unchanged)
             context_prefix = "\n\n=== COMPLETE DATASET ANALYSIS ===\n"
 
             # Filter data if restaurant specified
@@ -205,6 +290,9 @@ When answering questions:
                     return f"No data found for restaurant #{restaurant_id}"
             else:
                 context_prefix += "ANALYZING ALL RESTAURANTS\n\n"
+
+            # ...existing code for statistics/context building...
+            # (leave the rest of the method unchanged)
 
             # COMPREHENSIVE STATISTICS FOR ALL ITEMS
             total_items = len(df)
@@ -319,3 +407,31 @@ When answering questions:
             logger.error(f"Error in AI assistant: {e}")
             return f"Error: {str(e)}"
 
+    def get_restaurant_summary(self, restaurant_id: int) -> dict:
+        """Get a quick summary of a restaurant's menu"""
+        if self.classification_df is None:
+            return None
+
+        df = self.classification_df
+
+        if 'place_id' in df.columns:
+            df = df[df['place_id'] == restaurant_id]
+
+        if len(df) == 0:
+            return None
+
+        summary = {
+            'total_items': len(df),
+        }
+
+        if 'revenue' in df.columns:
+            summary['total_revenue'] = float(df['revenue'].sum())
+        if 'order_count' in df.columns:
+            summary['total_orders'] = int(df['order_count'].sum())
+        if 'category' in df.columns:
+            summary['categories'] = df['category'].value_counts().to_dict()
+        if 'revenue' in df.columns:
+            top_item = df.nlargest(1, 'revenue').iloc[0].to_dict()
+            summary['top_item'] = top_item
+
+        return summary
